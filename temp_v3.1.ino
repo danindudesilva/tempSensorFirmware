@@ -1,0 +1,498 @@
+/**************************************
+
+  _  ____       _        
+ (_)/ ___| __ _| |_ ___  
+ | | |  _ / _` | __/ _ \ 
+ | | |_| | (_| | ||  __/ 
+ |_|\____|\__,_|\__\___| 
+                         
+ * @project    Dialog iGate - Roller door controller
+ * @version    3.1
+ * @file       main.cpp
+ * @author     Randika Silva
+ * @group      Ideamart
+ * @copyright  Dialog Axiata PLC
+ * @date       August 2019
+ * @mcu        Atmega328
+ * @com_module SIM7000
+ * @framework  PlatformIO - Arduino Core
+ * 
+ Max MQTT Packet Size set to 200
+***************************************/
+
+#define TINY_GSM_MODEM_SIM7000
+#define FIRMWARE_VER "TempSensor_V3.0"
+
+//Sensor Pins
+#define DHTPIN1 2
+#define DHTPIN2 3
+#define MQTT_STATUS  SDA
+
+// ideaBoard pin configuration
+#define ideaBoard_PWRKEY 13
+#define ideaBoard_RX      8
+#define ideaBoard_TX      7
+#define ideaBoard_RST    11
+
+#define EVENT_TOPIC     "ideamart/sensor/v2/common"
+#define MQTT_USER       "ideamart-sensor-v2_4939"
+#define MQTT_PASS       "1598981175_4939"
+#define MQTT_BROKER     "mqtt.iot.ideamart.io"
+#define MQTT_PORT       1883
+#define GSM_APN         "dialogbb"
+#define NBIOT_APN       "nbiot"
+#define EEPROM_ADDR     0
+#define EEPROM_SIZE     1
+#define SMS_PORT        "87981"
+
+#define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
+
+#include <TinyGsmClient.h>
+#include <PubSubClient.h>
+#include <SoftwareSerial.h>
+#include <EEPROM.h>
+#include "DHT.h"
+
+SoftwareSerial SerialAT(7,8); // RX, TX
+TinyGsm modem(SerialAT);
+TinyGsmClient client(modem);
+PubSubClient mqtt(client);
+
+String ID;
+String clientId;
+int  rstCnt, battlevel;
+
+int8_t  apnNo, siglevel;
+int8_t  modem_retries = 0;
+int8_t  mqtt_retries = 0;
+int8_t  gprs_retries = 0;
+int8_t  publish_retries = 0;
+int8_t  STATUS_CODE = 0;
+int8_t  minSig = 31;
+int8_t  maxSig = 0;
+int  minBatt = 4500;
+int  maxBatt = 0;
+
+float h1 = 0.0;
+float h2 = 0.0;
+float t1 = 0.0;
+float t2 = 0.0;
+
+float tx1 = 0.0;
+float hx1 = 0.0;
+float tx2 = 0.0;
+float hx2 = 0.0;
+
+int8_t  t1_count = 0;
+int8_t  h1_count = 0;
+int8_t  t2_count = 0;
+int8_t  h2_count = 0;
+    
+unsigned long PUB_INTERVAL = 60000; //interval to publish data
+unsigned long PREV_PUBLISH = 0;
+unsigned long CUR_PUBLISH = 0;
+int8_t  NO_READ_THRES = 90;       //start reading data when only this percentage of PUB_INTERVAL is elapsed
+int8_t  READ_COUNT = 10;
+unsigned long PREV_READ = 0;
+unsigned long CUR_READ = 0;
+unsigned long PUBLISH_COUNT = 0;
+unsigned long SMS_INTERVAL = 3600000;
+unsigned long CUR_SMS = 0;
+unsigned long PREV_SMS = 0;
+
+DHT dht1(DHTPIN1, DHTTYPE);
+DHT dht2(DHTPIN2, DHTTYPE);
+
+void setup() {
+  //Initializing all variables
+  modem_retries = 0;
+  mqtt_retries = 0;
+  gprs_retries = 0;
+  publish_retries = 0;
+  STATUS_CODE = 0;
+  //Set all output pins pins to LOW
+  pinMode(MQTT_STATUS, OUTPUT);
+  digitalWrite(MQTT_STATUS, LOW);
+  delay(100);
+
+  pinMode(ideaBoard_RST, OUTPUT);
+  digitalWrite(ideaBoard_RST, LOW);
+  delay(100);
+  
+  //Power up modem
+  pinMode(ideaBoard_PWRKEY, OUTPUT);
+  digitalWrite(ideaBoard_PWRKEY, LOW);
+  digitalWrite(ideaBoard_PWRKEY, HIGH);
+  delay(1000);
+  
+  //Initialize Serial ports
+  Serial.begin(115200);
+  SerialAT.begin(4800);
+  delay(100);
+
+//  Serial.println(F(" _     _                                 _   "));
+//  Serial.println(F("(_)   | |                               | |  "));
+//  Serial.println(F(" _  __| | ___  __ _ _ __ ___   __ _ _ __| |_ "));
+//  Serial.println(F("| |/ _\\ |/ _ \\/ _\\ | |_ \\ _ \\ / _\\ | |__| __|"));
+//  Serial.println(F("| | (_| |  __/ (_| | | | | | | (_| | |  | |_ "));
+//  Serial.println(F("|_|\\__/_|\\___|\\__/_|_| |_| |_|\\__/_|_|   \\__|"));
+//  Serial.println(F(" "));
+  Serial.println(F("---------------------------------------------"));
+  Serial.println(F("COLD ROOM TEMPERATURE MONITORING DEVICE v1.0"));
+  Serial.println(F("---------------------------------------------"));
+  Serial.println(F(" "));
+  Serial.println(F(" "));
+  //Flash session id
+  rstCnt = EEPROM.read(EEPROM_ADDR);
+  rstCnt= rstCnt + 1; 
+  EEPROM.write(EEPROM_ADDR, rstCnt);
+  Serial.print(F("RESET COUNT: ")); Serial.println(EEPROM.read(EEPROM_ADDR));
+
+  //Flash session id
+  apnNo = EEPROM.read(EEPROM_ADDR+1);
+  
+  //Getting modem IMEI no.
+  Serial.print(F("GETTING MODEM IMEI: "));
+  
+  boolean imei_success = getModemIMEI();
+  if(imei_success){
+    modem_retries = 0;
+    Serial.println(F("READ IMEI SUCCESS"));
+  }else {
+    while(!imei_success){
+      if(modem_retries == 10){
+        Serial.println(F("CAN'T READ IMEI. CHECK MODEM"));
+        STATUS_CODE = 100;
+        break;
+      }
+      Serial.print(F("GETTING MODEM IMEI: "));
+      imei_success = getModemIMEI();
+      delay(100);
+      modem_retries += 1;
+    }
+  }
+  
+
+  // MQTT Broker setup
+  mqtt.setServer(MQTT_BROKER, MQTT_PORT);
+  //mqtt.setCallback(cb);
+  Serial.println(F("INITIALIZING SENSOR 1"));
+  dht1.begin();
+  
+  Serial.println(F("INITIALIZING SENSOR 2"));
+  dht2.begin();
+  
+}
+
+void loop() {
+  
+  CUR_PUBLISH = millis();
+  if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
+    Serial.println(F("##########################################################"));
+    Serial.println(F("GETTING READY TO PUBLISH DATA"));
+    
+    averageReadings();
+
+    if(apnNo == 1){
+      Serial.println(F("NETWORK: NBIOT"));
+      boolean gprs_connected = modem.gprsConnect("nbiot", "", "");
+      if(gprs_connected){
+        gprs_retries = 0;
+        Serial.println(F("CONNECTED TO NBIOT NETWORK"));
+        Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
+      }else{
+        while(!gprs_connected) {
+          if(gprs_retries == 10){
+            Serial.println(F("CONNECTION: FAILED"));
+            STATUS_CODE = 300;
+            break;
+          }
+          Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
+          gprs_connected = modem.gprsConnect("nbiot", "", "");
+          gprs_retries += 1;
+        }
+      }
+
+    }else {
+        Serial.println(F("NETWORK: GPRS"));
+        boolean gprs_connected = modem.gprsConnect("dialogbb", "", "");
+        if(gprs_connected){
+        gprs_retries = 0;
+        Serial.println(F("CONNECTED TO GPRS NETWORK"));
+        Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
+      }else{
+        while(!gprs_connected) {
+          if(gprs_retries == 10){
+            Serial.println(F("CONNECTION: FAILED"));
+            STATUS_CODE = 300;
+            break;
+          }
+          Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
+          gprs_connected = modem.gprsConnect("nbiot", "", "");
+          gprs_retries += 1;
+          /* if(modem.waitForNetwork()){
+           Serial.println("Net:OK");
+          } */
+        }
+      }   
+    }
+
+    //CONNECT TO MQTT SERVER
+    boolean mqtt_connected = mCon();
+    if(mqtt_connected){
+      mqtt_retries = 0;
+      digitalWrite(MQTT_STATUS, HIGH);
+      Serial.println(F("MQTT CONNECTED"));
+    }else{
+      while(!mqtt_connected){
+        digitalWrite(MQTT_STATUS, LOW);
+        if(mqtt_retries == 10){
+          Serial.println(F("CAN'T CONNECT TO MQTT BROKER"));
+          STATUS_CODE = 200;
+          mqttFail();
+          break;
+        }
+        mqtt_connected = mCon();
+        mqtt_retries += 1;
+      }
+    }
+  
+    //PUBLISH DATA
+    boolean publish_success = publishData();
+    if(publish_success){
+      PUBLISH_COUNT +=1;
+      Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
+      Serial.println(F("DATA SUCCESSFULLY PUBLISHED"));
+      Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
+      publish_retries = 0;
+      mqtt.disconnect();
+      Serial.println(F("DISCONNED FROM MQTT BROKER"));
+      modem.gprsDisconnect();
+      Serial.println(F("TCP CONNECTION SHUT"));
+      PREV_PUBLISH = CUR_PUBLISH;
+    }else{
+      while(!publish_success){
+        if(publish_retries == 10){
+          Serial.println(F("CAN'T PUBLISH DATA"));
+          STATUS_CODE = 400;
+          break;
+        }
+        publish_success = publishData();
+        publish_retries += 1;
+      }
+    }
+    
+  }else {
+//    Serial.print("NO_READ_THRES: "); Serial.println(NO_READ_THRES);
+//    Serial.print("PUB_INTERVAL: "); Serial.println(PUB_INTERVAL);
+
+    unsigned long READING_PART_OF_PUBLISH_INTERVAL = PUB_INTERVAL*NO_READ_THRES/100;
+//    Serial.print("READING_PART_OF_PUBLISH_INTERVAL: "); Serial.println(READING_PART_OF_PUBLISH_INTERVAL);
+    if(((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= READING_PART_OF_PUBLISH_INTERVAL)){
+//    Serial.println(F("============================================================="));
+//    Serial.println(F("STARTING SENSOR DATA READING"));
+    
+    CUR_READ = millis();
+//    Serial.print("CUR_READ: "); Serial.println(CUR_READ);
+//    Serial.print("PREV_READ: "); Serial.println(PREV_READ);
+    unsigned long DATA_READ_INTERVAL = (PUB_INTERVAL-READING_PART_OF_PUBLISH_INTERVAL)/READ_COUNT;
+//    Serial.print("DATA_READ_INTERVAL: "); Serial.println(DATA_READ_INTERVAL);
+    if((unsigned long)(CUR_READ - PREV_READ) >= DATA_READ_INTERVAL){
+      readDHT();      
+      PREV_READ = CUR_READ;
+    }
+  }
+  }
+//  Serial.print("millis(): "); Serial.println(millis());
+//  Serial.print("STATUS CODE: "); Serial.println(STATUS_CODE);
+  CUR_SMS = millis();
+  if((unsigned long)(CUR_SMS - PREV_SMS) >= SMS_INTERVAL){
+    boolean DU = dailyUpdate();
+    if(DU) Serial.println(F("DAILY UPDATE SENT"));
+    PREV_SMS = CUR_SMS;
+  }
+}
+
+void averageReadings(){
+  
+  Serial.println(F("Averaging sensor readings"));
+  if(t1_count > 0){
+    t1 = tx1 / t1_count;
+  }else {
+    t1 = -1000.0;
+  }
+  Serial.print(F("t1: ")); Serial.println(t1);
+  
+  if(h1_count > 0){
+    h1 = hx1 / h1_count;
+  }else {
+    h1 = -1000.0;
+  }
+  Serial.print(F("h1: ")); Serial.println(h1);
+  
+  if(t2_count > 0){
+    t2 = tx2 / t2_count;
+  }else {
+    t2 = -1000.0;
+  }
+  Serial.print(F("t2: ")); Serial.println(t2);
+  
+  if(t2_count > 0){
+    h2 = hx2 / h2_count;
+  }else {
+    h2 = -1000.0;
+  }
+  Serial.print(F("h2: ")); Serial.println(h2);
+
+  t1_count = 0;
+  h1_count = 0;
+  t2_count = 0;
+  h2_count = 0;
+  tx1 = 0.0;
+  hx1 = 0.0;
+  tx2 = 0.0;
+  hx2 = 0.0;
+
+}
+void readDHT(){
+  Serial.println(F("..............................................................."));
+  Serial.println(F("READING DATA FROM SENSORS"));
+  Serial.println(millis());
+  Serial.print(F("Reading t1 data point: ")); Serial.println(t1_count+1);
+  if(!isnan(dht1.readTemperature())){
+    tx1 = tx1 + dht1.readTemperature(); 
+    t1_count += 1;
+    Serial.println(tx1); 
+  }
+  
+  Serial.print(F("Reading h1 data point: ")); Serial.println(h1_count+1);
+  if(!isnan(dht1.readHumidity())){
+    hx1 = hx1 + dht1.readHumidity(); 
+    h1_count += 1;
+    Serial.println(hx1); 
+  }
+  
+  Serial.print(F("Reading t2 data point: ")); Serial.println(t2_count+1);
+  if(!isnan(dht2.readTemperature())){
+    tx2 = tx2 + dht2.readTemperature(); 
+    t2_count += 1;
+    Serial.println(tx2); 
+  }
+  
+  Serial.print(F("Reading h2 data point: ")); Serial.println(h2_count+1);
+  if(!isnan(dht2.readHumidity())){
+    hx2 = hx2 + dht2.readHumidity(); 
+    h2_count += 1;
+    Serial.println(hx2); 
+  }
+}
+
+boolean getModemIMEI() {
+
+  ID = modem.getIMEI();
+//  Serial.println(ID);
+
+  //check imei validity
+  if (ID.length() == 15){
+//    Serial.println("checking imei validity");
+    int sum = 0;
+//    Serial.print("Sum: "); Serial.println(sum);
+    for(int8_t  i = 0; i<ID.length(); i++){
+//      Serial.println(i);
+      int8_t  x = ID.substring(i, i+1).toInt();
+      if (i % 2 == 0){
+//        Serial.println("i is even");
+//        Serial.print("x is: "); Serial.println(x);
+        sum = sum + x;
+      }else {
+//        Serial.println("i is odd");
+//        Serial.print("x is: "); Serial.println(x*2);
+
+        if(x*2 > 9){
+//          Serial.println("x*2 > 9");
+          sum = sum + (x*2) % 10 + (x*2) / 10;
+//          Serial.print("Sum: "); Serial.println(sum);
+        }else {
+//          Serial.println("x*2 < 9");
+          sum = sum + x*2;
+//          Serial.print("Sum: "); Serial.println(sum);
+        }
+      }
+    }
+    
+//    Serial.print("Final sum: "); Serial.println(sum);
+    if(sum % 10 == 0){
+      //THIS IS VALID IMEI
+      Serial.println(ID);
+      STATUS_CODE = 0;
+      return true;
+    }else{
+      Serial.println(F("INVALID IMEI. CHECKSUM FAILED"));
+      return false;
+    }
+  }else {
+    Serial.println(F("INVALID IMEI. DIGITS COUNT MISMATCH"));
+    return false;
+  }
+}
+
+boolean mCon() {
+  
+  Serial.print(F("MQTT     : "));
+  randomSeed(millis()); //Set randomsource
+  clientId = ID + String(random(10,99));
+  
+  if (!mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
+    Serial.println(F("fail"));
+    return false;
+  }
+  Serial.println(F(" OK"));
+  Serial.print(F("ClientID :  "));
+  Serial.println(clientId);
+  
+  return mqtt.connected();
+
+}
+
+boolean publishData(){
+
+  siglevel  = modem.getSignalQuality();
+  if(siglevel > maxSig) maxSig = siglevel;
+  if(siglevel < minSig) minSig = siglevel;
+  
+  battlevel = modem.getBattVoltage();
+  if(battlevel > maxBatt) maxBatt = battlevel;
+  if(battlevel < minBatt) minBatt = battlevel;
+  
+  Serial.print(F("Battery Level: ")); Serial.println((float)battlevel/1000.0);
+  String csvMessage = String(siglevel) + "," + String(battlevel) + "," + String(h1) + "," + String(t1) + "," + String(h2) + "," + String(t2) + "," + String(ID);  
+  Serial.println(csvMessage);
+  Serial.print(F("PUBLISHING DATA TO MQTT TOPIC: ")); Serial.println(EVENT_TOPIC);
+  boolean pub = mqtt.publish(EVENT_TOPIC,csvMessage.c_str());
+  
+  return pub;
+}
+
+void mqttFail(){
+
+  siglevel  = modem.getSignalQuality();
+  battlevel = modem.getBattVoltage();
+ 
+ //send SMS when MQTT loop failed
+    modem.sendSMS(SMS_PORT,
+    ID+","
+    +ID+","
+    +"mqttfail"+","
+    +String(rstCnt)+","
+    +String(siglevel)+","
+    +String(battlevel)+","
+    +FIRMWARE_VER
+    );
+}
+
+boolean dailyUpdate(){
+  
+  //send SMS when MQTT loop failed
+  boolean sent = modem.sendSMS("+94777333295", "DEVICE ID: " + ID + "\nMAX SIG: " + String(maxSig) + "\nMIN SIG: " + String(minSig) + "\nMAX BAT: " + String(maxBatt) + "\nMIN BAT: " + String(minBatt) + "\nPUB COUNT: " + String(PUBLISH_COUNT) + "\nRESET COUNT: " + String(rstCnt));
+  return sent;
+}
