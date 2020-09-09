@@ -255,6 +255,7 @@ void loop() {
             Serial.println(F(": FAILED"));
             if(i == GPRS_ATTEMPTS){
               //Self Reset
+              
             }
           }
         }
@@ -272,6 +273,7 @@ void loop() {
             Serial.println(F(": FAILED"));
             if(i == GPRS_ATTEMPTS){
               //Self Reset
+              
             }
           }
         }   
@@ -284,7 +286,7 @@ void loop() {
         mqtt_connected = mCon();
         if(mqtt_connected){
             Serial.println(F(": SUCCESS"));
-            Serial.print(F("ClientID :  ")); Serial.println(clientId);
+            Serial.print(F("Client ID :  ")); Serial.println(clientId);
             digitalWrite(MQTT_STATUS, HIGH);
             break;
           } else{
@@ -301,11 +303,11 @@ void loop() {
       //PUBLISH DATA
       boolean published = 0;
       for(int8_t i=1; i<PUBLISH_ATTEMPTS; i++){
-        Serial.print(F("DATA PUBLISH ATTEMPT ")); Serial.print(i);
+        Serial.print(F("DATA PUBLISH ATTEMPT ")); Serial.println(i);
         published = publishData();
         if(published){
           PUBLISH_COUNT +=1;
-          Serial.println(F(": SUCCESS"));
+          Serial.println(F("DATA PUBLISH SUCCESSFUL"));
           Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
           Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
           mqtt.disconnect();
@@ -313,13 +315,13 @@ void loop() {
           modem.gprsDisconnect();
           Serial.println(F("TCP CONNECTION SHUT"));
           PREV_PUBLISH = CUR_PUBLISH;
+          break;
         }else {
           Serial.println(F(": FAILED"));
           if(i == PUBLISH_ATTEMPTS){
             //Self Reset
             Serial.println(F("CAN'T PUBLISH DATA"));
             STATUS_CODE = 400;
-            break;
           }
         }
       }
