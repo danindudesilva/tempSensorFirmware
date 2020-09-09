@@ -65,7 +65,6 @@ int  rstCnt, battlevel;
 int8_t  apnNo, siglevel;
 int8_t  modem_retries = 0;
 int8_t  mqtt_retries = 0;
-int8_t  gprs_retries = 0;
 int8_t  publish_retries = 0;
 int8_t  STATUS_CODE = 0;
 int8_t  minSig = 31;
@@ -107,6 +106,7 @@ boolean SIGNAL_LOW = false;
 boolean MODEM_OFF = false;
 #define RECHARGE_INTERVAL 3600000  //interval for modem power down unti battery charge in milliseconds
 #define MAX_BATTERY_THRESHOLD 4100
+#define GPRS_ATTEMPTS 10
 
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
@@ -115,7 +115,6 @@ void setup() {
   //Initializing all variables
   modem_retries = 0;
   mqtt_retries = 0;
-  gprs_retries = 0;
   publish_retries = 0;
   STATUS_CODE = 0;
   
@@ -245,45 +244,37 @@ void loop() {
       averageReadings();
   
       if(apnNo == 1){
-        Serial.println(F("NETWORK: NBIOT"));
-        boolean gprs_connected = modem.gprsConnect("nbiot", "", "");
-        if(gprs_connected){
-          gprs_retries = 0;
-          Serial.println(F("CONNECTED TO NBIOT NETWORK"));
-          Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
-        }else{
-          while(!gprs_connected) {
-            if(gprs_retries == 10){
-              Serial.println(F("CONNECTION: FAILED"));
-              STATUS_CODE = 300;
-              break;
+        boolean gprs_connected = 0;
+        for(int8_t i=1; i<=GPRS_ATTEMPTS; i++){
+          Serial.println(F("NETWORK: NBIOT"));
+          Serial.print(F("CONNECTING TO NETWORK: ATTEMPT ")); Serial.print(i);
+          gprs_connected = modem.gprsConnect("nbiot", "", "");
+          if(gprs_connected){
+            Serial.println(F(": SUCCESS"));
+            Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
+            break;
+          } else{
+            Serial.println(F(": FAILED"));
+            if(i == GPRS_ATTEMPTS){
+              //Self Reset
             }
-            Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
-            gprs_connected = modem.gprsConnect("nbiot", "", "");
-            gprs_retries += 1;
           }
         }
-  
       }else {
+        boolean gprs_connected = 0;
+        for(int8_t i=1; i<=GPRS_ATTEMPTS; i++){
           Serial.println(F("NETWORK: GPRS"));
-          boolean gprs_connected = modem.gprsConnect("dialogbb", "", "");
+          Serial.print(F("CONNECTING TO NETWORK: ATTEMPT ")); Serial.print(i);
+          gprs_connected = modem.gprsConnect("dialogbb", "", "");
           if(gprs_connected){
-          gprs_retries = 0;
-          Serial.println(F("CONNECTED TO GPRS NETWORK"));
-          Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
-        }else{
-          while(!gprs_connected) {
-            if(gprs_retries == 10){
-              Serial.println(F("CONNECTION: FAILED"));
-              STATUS_CODE = 300;
-              break;
+            Serial.println(F(": SUCCESS"));
+            Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
+            break;
+          } else{
+            Serial.println(F(": FAILED"));
+            if(i == GPRS_ATTEMPTS){
+              //Self Reset
             }
-            Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
-            gprs_connected = modem.gprsConnect("nbiot", "", "");
-            gprs_retries += 1;
-            /* if(modem.waitForNetwork()){
-             Serial.println("Net:OK");
-            } */
           }
         }   
       }
