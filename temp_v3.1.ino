@@ -88,7 +88,7 @@ int8_t  h1_count = 0;
 int8_t  t2_count = 0;
 int8_t  h2_count = 0;
     
-unsigned long PUB_INTERVAL = 60000; //interval to publish data
+#define PUB_INTERVAL 60000 //interval to publish data
 unsigned long PREV_PUBLISH = 0;
 unsigned long CUR_PUBLISH = 0;
 int8_t  NO_READ_THRES = 90;       //start reading data when only this percentage of PUB_INTERVAL is elapsed
@@ -96,7 +96,7 @@ int8_t  READ_COUNT = 10;
 unsigned long PREV_READ = 0;
 unsigned long CUR_READ = 0;
 unsigned long PUBLISH_COUNT = 0;
-unsigned long SMS_INTERVAL = 3600000;
+#define SMS_INTERVAL 3600000
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
