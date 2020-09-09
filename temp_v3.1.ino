@@ -143,9 +143,9 @@ void setup() {
 //  Serial.println(F("| | (_| |  __/ (_| | | | | | | (_| | |  | |_ "));
 //  Serial.println(F("|_|\\__/_|\\___|\\__/_|_| |_| |_|\\__/_|_|   \\__|"));
 //  Serial.println(F(" "));
-  Serial.println(F("---------------------------------------------"));
+  Serial.println(F("--------------------------------------------"));
   Serial.println(F("COLD ROOM TEMPERATURE MONITORING DEVICE v1.0"));
-  Serial.println(F("---------------------------------------------"));
+  Serial.println(F("--------------------------------------------"));
   Serial.println(F(" "));
   Serial.println(F(" "));
   
@@ -317,7 +317,7 @@ void loop() {
           modem.gprsDisconnect();
           Serial.println(F("TCP CONNECTION SHUT"));
           //modemPowerDown();
-          Serial.println(F("MODEM POWERED DOWN"));
+          //Serial.println(F("MODEM POWERED DOWN"));
           PREV_PUBLISH = millis();
           break;
         }else {
@@ -326,7 +326,7 @@ void loop() {
             //Self Reset
             Serial.println(F("CAN'T PUBLISH DATA"));
             //modemPowerDown();
-            Serial.println(F("MODEM POWERED DOWN"));
+            //Serial.println(F("MODEM POWERED DOWN"));
             PREV_PUBLISH = millis();
             STATUS_CODE = 400;
           }
