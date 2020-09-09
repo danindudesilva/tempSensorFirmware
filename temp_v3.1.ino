@@ -89,7 +89,7 @@ int8_t  h1_count = 0;
 int8_t  t2_count = 0;
 int8_t  h2_count = 0;
     
-#define PUB_INTERVAL 60000 //interval to publish data
+#define PUB_INTERVAL 10000 //interval to publish data
 unsigned long PREV_PUBLISH = 0;
 unsigned long CUR_PUBLISH = 0;
 int8_t  NO_READ_THRES = 90;       //start reading data when only this percentage of PUB_INTERVAL is elapsed
@@ -101,11 +101,12 @@ unsigned long PUBLISH_COUNT = 0;
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
-#define MIN_BATTERY_THRESHOLD 3600
+#define MIN_BATTERY_THRESHOLD 3940
 #define MIN_SIGNAL_THRESHOLD 6
 boolean BATTERY_LOW = false;
 boolean SIGNAL_LOW = false;
-
+boolean MODEM_OFF = false;
+#define RECHARGE_INTERVAL 300000  //interval for modem power down unti battery charge in milliseconds
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
@@ -180,9 +181,6 @@ void setup() {
     }
   }
 
-  //CHECK BATTERY LOW
-  checkBatteryLow();
-  
   // MQTT Broker setup
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
   //mqtt.setCallback(cb);
@@ -191,162 +189,180 @@ void setup() {
   
   Serial.println(F("INITIALIZING SENSOR 2"));
   dht2.begin();
-  
+  Serial.println(F("WAITING TO READ DATA...")); 
 }
 
 void loop() {
-
-  //Check Battery Low
-  checkBatteryLow();
-    
-  CUR_PUBLISH = millis();
-  if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
-    Serial.println(F("##########################################################"));
-    Serial.println(F("GETTING READY TO PUBLISH DATA"));
-    
-    averageReadings();
-
-    if(apnNo == 1){
-      Serial.println(F("NETWORK: NBIOT"));
-      boolean gprs_connected = modem.gprsConnect("nbiot", "", "");
-      if(gprs_connected){
-        gprs_retries = 0;
-        Serial.println(F("CONNECTED TO NBIOT NETWORK"));
-        Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
-      }else{
-        while(!gprs_connected) {
-          if(gprs_retries == 10){
-            Serial.println(F("CONNECTION: FAILED"));
-            STATUS_CODE = 300;
-            break;
-          }
-          Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
-          gprs_connected = modem.gprsConnect("nbiot", "", "");
-          gprs_retries += 1;
-        }
-      }
-
-    }else {
-        Serial.println(F("NETWORK: GPRS"));
-        boolean gprs_connected = modem.gprsConnect("dialogbb", "", "");
-        if(gprs_connected){
-        gprs_retries = 0;
-        Serial.println(F("CONNECTED TO GPRS NETWORK"));
-        Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
-      }else{
-        while(!gprs_connected) {
-          if(gprs_retries == 10){
-            Serial.println(F("CONNECTION: FAILED"));
-            STATUS_CODE = 300;
-            break;
-          }
-          Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
-          gprs_connected = modem.gprsConnect("nbiot", "", "");
-          gprs_retries += 1;
-          /* if(modem.waitForNetwork()){
-           Serial.println("Net:OK");
-          } */
-        }
-      }   
-    }
-
-    //CONNECT TO MQTT SERVER
-    boolean mqtt_connected = mCon();
-    if(mqtt_connected){
-      mqtt_retries = 0;
-      digitalWrite(MQTT_STATUS, HIGH);
-      Serial.println(F("MQTT CONNECTED"));
-    }else{
-      while(!mqtt_connected){
-        digitalWrite(MQTT_STATUS, LOW);
-        if(mqtt_retries == 10){
-          Serial.println(F("CAN'T CONNECT TO MQTT BROKER"));
-          STATUS_CODE = 200;
-          mqttFail();
-          break;
-        }
-        mqtt_connected = mCon();
-        mqtt_retries += 1;
-      }
-    }
-  
-    //PUBLISH DATA
-    boolean publish_success = publishData();
-    if(publish_success){
-      PUBLISH_COUNT +=1;
-      Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
-      Serial.println(F("DATA SUCCESSFULLY PUBLISHED"));
-      Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
-      publish_retries = 0;
-      mqtt.disconnect();
-      Serial.println(F("DISCONNED FROM MQTT BROKER"));
-      modem.gprsDisconnect();
-      Serial.println(F("TCP CONNECTION SHUT"));
-      PREV_PUBLISH = CUR_PUBLISH;
-    }else{
-      while(!publish_success){
-        if(publish_retries == 10){
-          Serial.println(F("CAN'T PUBLISH DATA"));
-          STATUS_CODE = 400;
-          break;
-        }
-        publish_success = publishData();
-        publish_retries += 1;
-      }
-    }
-    
-  }else {
-//    Serial.print("NO_READ_THRES: "); Serial.println(NO_READ_THRES);
-//    Serial.print("PUB_INTERVAL: "); Serial.println(PUB_INTERVAL);
-
-    unsigned long READING_PART_OF_PUBLISH_INTERVAL = PUB_INTERVAL*NO_READ_THRES/100;
-//    Serial.print("READING_PART_OF_PUBLISH_INTERVAL: "); Serial.println(READING_PART_OF_PUBLISH_INTERVAL);
-    if(((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= READING_PART_OF_PUBLISH_INTERVAL)){
-//    Serial.println(F("============================================================="));
-//    Serial.println(F("STARTING SENSOR DATA READING"));
-    
-    CUR_READ = millis();
-//    Serial.print("CUR_READ: "); Serial.println(CUR_READ);
-//    Serial.print("PREV_READ: "); Serial.println(PREV_READ);
-    unsigned long DATA_READ_INTERVAL = (PUB_INTERVAL-READING_PART_OF_PUBLISH_INTERVAL)/READ_COUNT;
-//    Serial.print("DATA_READ_INTERVAL: "); Serial.println(DATA_READ_INTERVAL);
-    if((unsigned long)(CUR_READ - PREV_READ) >= DATA_READ_INTERVAL){
-      readDHT();      
-      PREV_READ = CUR_READ;
-    }
-  }
-  }
-//  Serial.print("millis(): "); Serial.println(millis());
-//  Serial.print("STATUS CODE: "); Serial.println(STATUS_CODE);
-  CUR_SMS = millis();
-  if((unsigned long)(CUR_SMS - PREV_SMS) >= SMS_INTERVAL){
-    boolean DU = dailyUpdate();
-    if(DU) Serial.println(F("DAILY UPDATE SENT"));
-    PREV_SMS = CUR_SMS;
-  }
-}
-
-void checkBatteryLow(){
-
+  //Serial.println(F("IN LOOP"));
+    //CHECK BATTERY LOW
   if(BATTERY_LOW){
     //do battery low action
-    if(modem.getBattVoltage() <= MIN_BATTERY_THRESHOLD*1.1){     //if the battery level has not increased more than 1.1 times the threshold
-      String message = "Device " + ID + "BATTERY LOW, NOT CHARGING!\nDEVICE POWERING DOWN. DEVICE WILL POWER UP ONCE CONNECTED TO A POWER SOURCE.";
-      while(!alertSMS(message)){
-        ;
+    Serial.println(F("%%%%%%%%% BATTERY LOW %%%%%%%%%%%%%%%"));
+    if(MODEM_OFF){
+      Serial.println(F("MODEM OFF"));
+      modemPowerUp();
+      delay(5000);
+      battlevel = modem.getBattVoltage();
+      if(battlevel < MIN_BATTERY_THRESHOLD*1.04){     //if the battery level has not increased more than 1.1 times the threshold
+        //POWER OFF MODEM AGAIN
+        Serial.println(battlevel);
+        modem.poweroff();
+      
+      }else { //if the battery has charged        
+        modemPowerUp();
+        delay(1000);
+        boolean sentAlert = alertSMS("Device " + ID + "POWERED UP AND CHARGING");
+        if(!sentAlert){
+          while(!sentAlert){
+            sentAlert = alertSMS("Device " + ID + "POWERED UP AND CHARGING");
+          }
+        }
+        Serial.println(F("MODEM ON"));
+        MODEM_OFF = false;
+        BATTERY_LOW = false;
       }
+    }else{
+      String message = "Device " + ID + "\nBATTERY LOW, NOT CHARGING!\nDEVICE POWERING DOWN. Device will power up when charged.";
+      alertSMS(message);
+      delay(100);
+      dailyUpdate();
+      Serial.println(F("MODEM POWERING DOWN"));
       modem.poweroff();
-      // Enter power down state for 8 s with ADC and BOD module disabled
-      LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
-    }else { //if the battery has charged
-      BATTERY_LOW = false;
+      MODEM_OFF = true;
+      delay(RECHARGE_INTERVAL);
     }
-
-  }else{
     
-  }
+
+  }else{ //IF BATTERY OK
+    
+    CUR_PUBLISH = millis();
+    if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
+      Serial.println(F("##########################################################"));
+      Serial.println(F("GETTING READY TO PUBLISH DATA"));
+      
+      averageReadings();
   
+      if(apnNo == 1){
+        Serial.println(F("NETWORK: NBIOT"));
+        boolean gprs_connected = modem.gprsConnect("nbiot", "", "");
+        if(gprs_connected){
+          gprs_retries = 0;
+          Serial.println(F("CONNECTED TO NBIOT NETWORK"));
+          Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
+        }else{
+          while(!gprs_connected) {
+            if(gprs_retries == 10){
+              Serial.println(F("CONNECTION: FAILED"));
+              STATUS_CODE = 300;
+              break;
+            }
+            Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
+            gprs_connected = modem.gprsConnect("nbiot", "", "");
+            gprs_retries += 1;
+          }
+        }
+  
+      }else {
+          Serial.println(F("NETWORK: GPRS"));
+          boolean gprs_connected = modem.gprsConnect("dialogbb", "", "");
+          if(gprs_connected){
+          gprs_retries = 0;
+          Serial.println(F("CONNECTED TO GPRS NETWORK"));
+          Serial.print(F("Signal level: ")); Serial.println(modem.getSignalQuality());
+        }else{
+          while(!gprs_connected) {
+            if(gprs_retries == 10){
+              Serial.println(F("CONNECTION: FAILED"));
+              STATUS_CODE = 300;
+              break;
+            }
+            Serial.println(F("ATTEMPTING TO CONNECT TO NETWORK"));
+            gprs_connected = modem.gprsConnect("nbiot", "", "");
+            gprs_retries += 1;
+            /* if(modem.waitForNetwork()){
+             Serial.println("Net:OK");
+            } */
+          }
+        }   
+      }
+  
+      //CONNECT TO MQTT SERVER
+      boolean mqtt_connected = mCon();
+      if(mqtt_connected){
+        mqtt_retries = 0;
+        digitalWrite(MQTT_STATUS, HIGH);
+        Serial.println(F("MQTT CONNECTED"));
+      }else{
+        while(!mqtt_connected){
+          digitalWrite(MQTT_STATUS, LOW);
+          if(mqtt_retries == 10){
+            Serial.println(F("CAN'T CONNECT TO MQTT BROKER"));
+            STATUS_CODE = 200;
+            mqttFail();
+            break;
+          }
+          mqtt_connected = mCon();
+          mqtt_retries += 1;
+        }
+      }
+    
+      //PUBLISH DATA
+      boolean publish_success = publishData();
+      if(publish_success){
+        PUBLISH_COUNT +=1;
+        Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
+        Serial.println(F("DATA SUCCESSFULLY PUBLISHED"));
+        Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
+        publish_retries = 0;
+        mqtt.disconnect();
+        Serial.println(F("DISCONNED FROM MQTT BROKER"));
+        modem.gprsDisconnect();
+        Serial.println(F("TCP CONNECTION SHUT"));
+        PREV_PUBLISH = CUR_PUBLISH;
+      }else{
+        while(!publish_success){
+          if(publish_retries == 10){
+            Serial.println(F("CAN'T PUBLISH DATA"));
+            STATUS_CODE = 400;
+            break;
+          }
+          publish_success = publishData();
+          publish_retries += 1;
+        }
+      }
+      
+    }else {
+  //    Serial.print("NO_READ_THRES: "); Serial.println(NO_READ_THRES);
+  //    Serial.print("PUB_INTERVAL: "); Serial.println(PUB_INTERVAL);
+  
+      unsigned long READING_PART_OF_PUBLISH_INTERVAL = PUB_INTERVAL*NO_READ_THRES/100;
+  //    Serial.print("READING_PART_OF_PUBLISH_INTERVAL: "); Serial.println(READING_PART_OF_PUBLISH_INTERVAL);
+      if(((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= READING_PART_OF_PUBLISH_INTERVAL)){
+  //    Serial.println(F("============================================================="));
+  //    Serial.println(F("STARTING SENSOR DATA READING"));
+      
+      CUR_READ = millis();
+  //    Serial.print("CUR_READ: "); Serial.println(CUR_READ);
+  //    Serial.print("PREV_READ: "); Serial.println(PREV_READ);
+      unsigned long DATA_READ_INTERVAL = (PUB_INTERVAL-READING_PART_OF_PUBLISH_INTERVAL)/READ_COUNT;
+  //    Serial.print("DATA_READ_INTERVAL: "); Serial.println(DATA_READ_INTERVAL);
+      if((unsigned long)(CUR_READ - PREV_READ) >= DATA_READ_INTERVAL){
+        readDHT();      
+        PREV_READ = CUR_READ;
+      }
+    }
+    }
+  //  Serial.print("millis(): "); Serial.println(millis());
+  //  Serial.print("STATUS CODE: "); Serial.println(STATUS_CODE);
+    CUR_SMS = millis();
+    if((unsigned long)(CUR_SMS - PREV_SMS) >= SMS_INTERVAL){
+      boolean DU = dailyUpdate();
+      if(DU) Serial.println(F("DAILY UPDATE SENT"));
+      PREV_SMS = CUR_SMS;
+    }
+  }
 }
+
 void modemPowerUp(){
   digitalWrite(ideaBoard_PWRKEY, LOW);
   delay(200);
@@ -542,6 +558,7 @@ boolean dailyUpdate(){
   minSig = 33;
   maxBatt = 0;
   minBatt = 4500;
+  PUBLISH_COUNT = 0;
   return sent;
 }
 
