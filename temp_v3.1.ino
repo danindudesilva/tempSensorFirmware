@@ -64,7 +64,6 @@ int  rstCnt, battlevel;
 
 int8_t  apnNo, siglevel;
 int8_t  modem_retries = 0;
-int8_t  mqtt_retries = 0;
 int8_t  publish_retries = 0;
 int8_t  STATUS_CODE = 0;
 int8_t  minSig = 31;
@@ -107,14 +106,13 @@ boolean MODEM_OFF = false;
 #define RECHARGE_INTERVAL 3600000  //interval for modem power down unti battery charge in milliseconds
 #define MAX_BATTERY_THRESHOLD 4100
 #define GPRS_ATTEMPTS 10
-
+#define MQTT_ATTEMPTS 10
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
 void setup() {
   //Initializing all variables
   modem_retries = 0;
-  mqtt_retries = 0;
   publish_retries = 0;
   STATUS_CODE = 0;
   
@@ -280,25 +278,25 @@ void loop() {
       }
   
       //CONNECT TO MQTT SERVER
-      boolean mqtt_connected = mCon();
-      if(mqtt_connected){
-        mqtt_retries = 0;
-        digitalWrite(MQTT_STATUS, HIGH);
-        Serial.println(F("MQTT CONNECTED"));
-      }else{
-        while(!mqtt_connected){
-          digitalWrite(MQTT_STATUS, LOW);
-          if(mqtt_retries == 10){
-            Serial.println(F("CAN'T CONNECT TO MQTT BROKER"));
-            STATUS_CODE = 200;
-            mqttFail();
+      boolean mqtt_connected = 0;
+      for(int8_t i=1; i<=MQTT_ATTEMPTS; i++){
+        Serial.print(F("CONNECTING TO MQTT BROKER: ATTEMPT ")); Serial.print(i);
+        mqtt_connected = mCon();
+        if(mqtt_connected){
+            Serial.println(F(": SUCCESS"));
+            digitalWrite(MQTT_STATUS, HIGH);
             break;
+          } else{
+            Serial.println(F(": FAILED"));
+            if(i == MQTT_ATTEMPTS){
+              //Self Reset
+              Serial.println(F("CAN'T CONNECT TO MQTT BROKER"));
+              STATUS_CODE = 200;
+              mqttFail();
+            }
           }
-          mqtt_connected = mCon();
-          mqtt_retries += 1;
-        }
       }
-    
+      
       //PUBLISH DATA
       boolean publish_success = publishData();
       if(publish_success){
