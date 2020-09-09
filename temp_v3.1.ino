@@ -208,6 +208,7 @@ void loop() {
         //POWER OFF MODEM AGAIN
         Serial.println(battlevel);
         modemPowerDown();
+        delay(RECHARGE_INTERVAL/2);
       
       }else { //if the battery has charged        
         modemPowerUp();
