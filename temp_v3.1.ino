@@ -234,9 +234,9 @@ void loop() {
 
   }else{ //IF BATTERY OK
     
-    CUR_PUBLISH = millis();
+    //This is where CUR_PUBLISH = millis(); previously was
     if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
-      Serial.println(F("##########################################################"));
+      Serial.println(F("#############################################################"));
       Serial.println(F("GETTING READY TO PUBLISH DATA"));
       
       averageReadings();
@@ -308,7 +308,7 @@ void loop() {
         if(published){
           PUBLISH_COUNT +=1;
           Serial.println(F("DATA PUBLISH SUCCESSFUL"));
-          Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
+          Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
           Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
           mqtt.disconnect();
           Serial.println(F("DISCONNED FROM MQTT BROKER"));
@@ -321,6 +321,7 @@ void loop() {
           if(i == PUBLISH_ATTEMPTS){
             //Self Reset
             Serial.println(F("CAN'T PUBLISH DATA"));
+            PREV_PUBLISH = millis();
             STATUS_CODE = 400;
           }
         }
@@ -333,19 +334,19 @@ void loop() {
       unsigned long READING_PART_OF_PUBLISH_INTERVAL = PUB_INTERVAL*NO_READ_THRES/100;
   //    Serial.print("READING_PART_OF_PUBLISH_INTERVAL: "); Serial.println(READING_PART_OF_PUBLISH_INTERVAL);
       if(((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= READING_PART_OF_PUBLISH_INTERVAL)){
-  //    Serial.println(F("============================================================="));
-  //    Serial.println(F("STARTING SENSOR DATA READING"));
-      
-      CUR_READ = millis();
-  //    Serial.print("CUR_READ: "); Serial.println(CUR_READ);
-  //    Serial.print("PREV_READ: "); Serial.println(PREV_READ);
-      unsigned long DATA_READ_INTERVAL = (PUB_INTERVAL-READING_PART_OF_PUBLISH_INTERVAL)/READ_COUNT;
-  //    Serial.print("DATA_READ_INTERVAL: "); Serial.println(DATA_READ_INTERVAL);
-      if((unsigned long)(CUR_READ - PREV_READ) >= DATA_READ_INTERVAL){
-        readDHT();      
-        PREV_READ = CUR_READ;
+    //    Serial.println(F("============================================================="));
+    //    Serial.println(F("STARTING SENSOR DATA READING"));
+        
+        CUR_READ = millis();
+    //    Serial.print("CUR_READ: "); Serial.println(CUR_READ);
+    //    Serial.print("PREV_READ: "); Serial.println(PREV_READ);
+        unsigned long DATA_READ_INTERVAL = (PUB_INTERVAL-READING_PART_OF_PUBLISH_INTERVAL)/READ_COUNT;
+    //    Serial.print("DATA_READ_INTERVAL: "); Serial.println(DATA_READ_INTERVAL);
+        if((unsigned long)(CUR_READ - PREV_READ) >= DATA_READ_INTERVAL){
+          readDHT();      
+          PREV_READ = CUR_READ;
+        }
       }
-    }
     }
   //  Serial.print("millis(): "); Serial.println(millis());
   //  Serial.print("STATUS CODE: "); Serial.println(STATUS_CODE);
@@ -355,7 +356,9 @@ void loop() {
       if(DU) Serial.println(F("DAILY UPDATE SENT"));
       PREV_SMS = CUR_SMS;
     }
-  }
+    
+    CUR_PUBLISH = millis();
+  }  
 }
 
 void modemPowerUp(){
@@ -414,7 +417,7 @@ void averageReadings(){
 
 }
 void readDHT(){
-  Serial.println(F("..............................................................."));
+  Serial.println(F(".............................................................."));
   Serial.println(F("READING DATA FROM SENSORS"));
   Serial.println(millis());
   Serial.print(F("Reading t1 data point: ")); Serial.println(t1_count+1);
