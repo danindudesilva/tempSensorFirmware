@@ -44,6 +44,7 @@
 #define EEPROM_ADDR     0
 #define EEPROM_SIZE     1
 #define SMS_PORT        "87981"
+#define SMS_NUMBER      "+94777333295"
 
 #define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
 
@@ -541,7 +542,7 @@ void mqttFail(){
   battlevel = modem.getBattVoltage();
  
  //send SMS when MQTT loop failed
-    modem.sendSMS(SMS_PORT,
+    modem.sendSMS(SMS_NUMBER,
     ID+","
     +ID+","
     +"mqttfail"+","
@@ -555,7 +556,12 @@ void mqttFail(){
 boolean dailyUpdate(){
   
   //send SMS when MQTT loop failed
-  boolean sent = modem.sendSMS("+94777333295", "DEVICE ID: " + ID + "\nMAX SIG: " + String(maxSig) + "\nMIN SIG: " + String(minSig) + "\nMAX BAT: " + String(maxBatt) + "\nMIN BAT: " + String(minBatt) + "\nPUB COUNT: " + String(PUBLISH_COUNT) + "\nRESET COUNT: " + String(rstCnt));
+  boolean sent = 0;
+  for(int8_t i=1; i<=10; i++){
+    sent = modem.sendSMS(SMS_NUMBER, "DEVICE ID: " + ID + "\nMAX SIG: " + String(maxSig) + "\nMIN SIG: " + String(minSig) + "\nMAX BAT: " + String(maxBatt) + "\nMIN BAT: " + String(minBatt) + "\nPUB COUNT: " + String(PUBLISH_COUNT));
+    delay(1000);
+    if(sent) break;
+  }
   
   maxSig = 0;
   minSig = 33;
@@ -567,7 +573,11 @@ boolean dailyUpdate(){
 
 boolean alertSMS(String message){
   //Send Alert to owner
-  boolean sent = modem.sendSMS("+94777333295", message);
-
+  boolean sent = 0;
+  for(int8_t i=1; i<=10; i++){
+    sent = modem.sendSMS(SMS_NUMBER, message);
+    delay(1000);
+    if(sent) break;
+  }
   return sent;
 }
