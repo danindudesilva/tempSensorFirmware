@@ -100,6 +100,11 @@ unsigned long PUBLISH_COUNT = 0;
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
+#define MIN_BATTERY_THRESHOLD 3600
+#define MIN_SIGNAL_THRESHOLD 6
+boolean BATTERY_LOW = false;
+boolean SIGNAL_LOW = false;
+
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
@@ -110,6 +115,7 @@ void setup() {
   gprs_retries = 0;
   publish_retries = 0;
   STATUS_CODE = 0;
+  
   //Set all output pins pins to LOW
   pinMode(MQTT_STATUS, OUTPUT);
   digitalWrite(MQTT_STATUS, LOW);
@@ -121,14 +127,13 @@ void setup() {
   
   //Power up modem
   pinMode(ideaBoard_PWRKEY, OUTPUT);
-  digitalWrite(ideaBoard_PWRKEY, LOW);
-  digitalWrite(ideaBoard_PWRKEY, HIGH);
-  delay(1000);
+  modemPowerUp();
   
   //Initialize Serial ports
   Serial.begin(115200);
   SerialAT.begin(4800);
   delay(100);
+
 
 //  Serial.println(F(" _     _                                 _   "));
 //  Serial.println(F("(_)   | |                               | |  "));
@@ -142,6 +147,7 @@ void setup() {
   Serial.println(F("---------------------------------------------"));
   Serial.println(F(" "));
   Serial.println(F(" "));
+  
   //Flash session id
   rstCnt = EEPROM.read(EEPROM_ADDR);
   rstCnt= rstCnt + 1; 
@@ -313,6 +319,12 @@ void loop() {
   }
 }
 
+void modemPowerUp(){
+  digitalWrite(ideaBoard_PWRKEY, LOW);
+  digitalWrite(ideaBoard_PWRKEY, HIGH);
+  delay(1000);
+}
+
 void averageReadings(){
   
   Serial.println(F("Averaging sensor readings"));
@@ -459,11 +471,13 @@ boolean publishData(){
   siglevel  = modem.getSignalQuality();
   if(siglevel > maxSig) maxSig = siglevel;
   if(siglevel < minSig) minSig = siglevel;
+  if(minSig <= MIN_SIGNAL_THRESHOLD) SIGNAL_LOW = true;
   
   battlevel = modem.getBattVoltage();
   if(battlevel > maxBatt) maxBatt = battlevel;
   if(battlevel < minBatt) minBatt = battlevel;
-  
+  if(minBatt <= MIN_BATTERY_THRESHOLD) BATTERY_LOW = true;
+    
   Serial.print(F("Battery Level: ")); Serial.println((float)battlevel/1000.0);
   String csvMessage = String(siglevel) + "," + String(battlevel) + "," + String(h1) + "," + String(t1) + "," + String(h2) + "," + String(t2) + "," + String(ID);  
   Serial.println(csvMessage);
