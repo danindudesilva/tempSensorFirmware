@@ -1,24 +1,26 @@
-/**************************************
-
-  _  ____       _        
- (_)/ ___| __ _| |_ ___  
- | | |  _ / _` | __/ _ \ 
- | | |_| | (_| | ||  __/ 
- |_|\____|\__,_|\__\___| 
-                         
- * @project    Dialog iGate - Roller door controller
+/**********************************************
+ _     _                                 _   
+(_)   | |                               | |  
+ _  __| | ___  __ _ _ __ ___   __ _ _ __| |_ 
+| |/ _\ |/ _ \/ _\ | |_ \ _ \ / _\ | |__| __|
+| | (_| |  __/ (_| | | | | | | (_| | |  | |_ 
+|_|\__/_|\___|\__/_|_| |_| |_|\__/_|_|   \__|
+--------------------------------------------
+COLD ROOM TEMPERATURE MONITORING DEVICE v1.0
+--------------------------------------------
+                  
+ * @project    COLD ROOM TEMPERATURE MONITORING
  * @version    3.1
  * @file       main.cpp
- * @author     Randika Silva
+ * @author     Danindu de Silva
  * @group      Ideamart
  * @copyright  Dialog Axiata PLC
- * @date       August 2019
- * @mcu        Atmega328
+ * @date       September 2020
+ * @mcu        Atmega328p
  * @com_module SIM7000
- * @framework  PlatformIO - Arduino Core
- * 
- Max MQTT Packet Size set to 200
-***************************************/
+ * @framework  Arduino
+
+***********************************************/
 
 #define TINY_GSM_MODEM_SIM7000
 #define FIRMWARE_VER "TempSensor_V3.0"
@@ -137,24 +139,23 @@ void setup() {
   delay(100);
 
 
-//  Serial.println(F(" _     _                                 _   "));
-//  Serial.println(F("(_)   | |                               | |  "));
-//  Serial.println(F(" _  __| | ___  __ _ _ __ ___   __ _ _ __| |_ "));
-//  Serial.println(F("| |/ _\\ |/ _ \\/ _\\ | |_ \\ _ \\ / _\\ | |__| __|"));
-//  Serial.println(F("| | (_| |  __/ (_| | | | | | | (_| | |  | |_ "));
-//  Serial.println(F("|_|\\__/_|\\___|\\__/_|_| |_| |_|\\__/_|_|   \\__|"));
-//  Serial.println(F(" "));
+  Serial.println(F(" _     _                                 _   "));
+  Serial.println(F("(_)   | |                               | |  "));
+  Serial.println(F(" _  __| | ___  __ _ _ __ ___   __ _ _ __| |_ "));
+  Serial.println(F("| |/ _\\ |/ _ \\/ _\\ | |_ \\ _ \\ / _\\ | |__| __|"));
+  Serial.println(F("| | (_| |  __/ (_| | | | | | | (_| | |  | |_ "));
+  Serial.println(F("|_|\\__/_|\\___|\\__/_|_| |_| |_|\\__/_|_|   \\__|"));
   Serial.println(F("--------------------------------------------"));
   Serial.println(F("COLD ROOM TEMPERATURE MONITORING DEVICE v1.0"));
   Serial.println(F("--------------------------------------------"));
   Serial.println(F(" "));
-  Serial.println(F(" "));
+  Serial.flush();
   
   //Flash session id
   rstCnt = EEPROM.read(EEPROM_ADDR);
   rstCnt= rstCnt + 1; 
   EEPROM.write(EEPROM_ADDR, rstCnt);
-  Serial.print(F("RESET COUNT: ")); Serial.println(EEPROM.read(EEPROM_ADDR));
+  //Serial.print(F("RESET COUNT: ")); Serial.println(EEPROM.read(EEPROM_ADDR));
 
   //Flash session id
   apnNo = EEPROM.read(EEPROM_ADDR+1);
