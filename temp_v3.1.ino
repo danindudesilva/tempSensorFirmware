@@ -64,7 +64,6 @@ int  rstCnt, battlevel;
 
 int8_t  apnNo, siglevel;
 int8_t  modem_retries = 0;
-int8_t  publish_retries = 0;
 int8_t  STATUS_CODE = 0;
 int8_t  minSig = 31;
 int8_t  maxSig = 0;
@@ -107,13 +106,14 @@ boolean MODEM_OFF = false;
 #define MAX_BATTERY_THRESHOLD 4100
 #define GPRS_ATTEMPTS 10
 #define MQTT_ATTEMPTS 10
+#define PUBLISH_ATTEMPTS 10
+
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
 void setup() {
   //Initializing all variables
   modem_retries = 0;
-  publish_retries = 0;
   STATUS_CODE = 0;
   
   //Set all output pins pins to LOW
@@ -284,6 +284,7 @@ void loop() {
         mqtt_connected = mCon();
         if(mqtt_connected){
             Serial.println(F(": SUCCESS"));
+            Serial.print(F("ClientID :  ")); Serial.println(clientId);
             digitalWrite(MQTT_STATUS, HIGH);
             break;
           } else{
@@ -298,27 +299,28 @@ void loop() {
       }
       
       //PUBLISH DATA
-      boolean publish_success = publishData();
-      if(publish_success){
-        PUBLISH_COUNT +=1;
-        Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
-        Serial.println(F("DATA SUCCESSFULLY PUBLISHED"));
-        Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
-        publish_retries = 0;
-        mqtt.disconnect();
-        Serial.println(F("DISCONNED FROM MQTT BROKER"));
-        modem.gprsDisconnect();
-        Serial.println(F("TCP CONNECTION SHUT"));
-        PREV_PUBLISH = CUR_PUBLISH;
-      }else{
-        while(!publish_success){
-          if(publish_retries == 10){
+      boolean published = 0;
+      for(int8_t i=1; i<PUBLISH_ATTEMPTS; i++){
+        Serial.print(F("DATA PUBLISH ATTEMPT ")); Serial.print(i);
+        published = publishData();
+        if(published){
+          PUBLISH_COUNT +=1;
+          Serial.println(F(": SUCCESS"));
+          Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
+          Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
+          mqtt.disconnect();
+          Serial.println(F("DISCONNED FROM MQTT BROKER"));
+          modem.gprsDisconnect();
+          Serial.println(F("TCP CONNECTION SHUT"));
+          PREV_PUBLISH = CUR_PUBLISH;
+        }else {
+          Serial.println(F(": FAILED"));
+          if(i == PUBLISH_ATTEMPTS){
+            //Self Reset
             Serial.println(F("CAN'T PUBLISH DATA"));
             STATUS_CODE = 400;
             break;
           }
-          publish_success = publishData();
-          publish_retries += 1;
         }
       }
       
@@ -492,21 +494,14 @@ boolean getModemIMEI() {
 }
 
 boolean mCon() {
-  
-  Serial.print(F("MQTT     : "));
   randomSeed(millis()); //Set randomsource
   clientId = ID + String(random(10,99));
   
   if (!mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
     Serial.println(F("fail"));
     return false;
-  }
-  Serial.println(F(" OK"));
-  Serial.print(F("ClientID :  "));
-  Serial.println(clientId);
-  
+  }  
   return mqtt.connected();
-
 }
 
 boolean publishData(){
