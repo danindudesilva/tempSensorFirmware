@@ -52,6 +52,7 @@
 #include <SoftwareSerial.h>
 #include <EEPROM.h>
 #include "DHT.h"
+#include "LowPower.h"
 
 SoftwareSerial SerialAT(7,8); // RX, TX
 TinyGsm modem(SerialAT);
@@ -179,12 +180,9 @@ void setup() {
     }
   }
 
-  if(BATTERY_LOW){
-    //do battery low action
-    String message = "Device " + ID + "BATTERY LOW, NOT CHARGING!\nDEVICE POWERING DOWN. DEVICE WILL POWER UP ONCE CONNECTED TO A POWER SOURCE.";
-    alertSMS(message);
-  }
-
+  //CHECK BATTERY LOW
+  checkBatteryLow();
+  
   // MQTT Broker setup
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
   //mqtt.setCallback(cb);
@@ -197,7 +195,10 @@ void setup() {
 }
 
 void loop() {
-  
+
+  //Check Battery Low
+  checkBatteryLow();
+    
   CUR_PUBLISH = millis();
   if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
     Serial.println(F("##########################################################"));
@@ -325,6 +326,27 @@ void loop() {
   }
 }
 
+void checkBatteryLow(){
+
+  if(BATTERY_LOW){
+    //do battery low action
+    if(modem.getBattVoltage() <= MIN_BATTERY_THRESHOLD*1.1){     //if the battery level has not increased more than 1.1 times the threshold
+      String message = "Device " + ID + "BATTERY LOW, NOT CHARGING!\nDEVICE POWERING DOWN. DEVICE WILL POWER UP ONCE CONNECTED TO A POWER SOURCE.";
+      while(!alertSMS(message)){
+        ;
+      }
+      modem.poweroff();
+      // Enter power down state for 8 s with ADC and BOD module disabled
+      LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+    }else { //if the battery has charged
+      BATTERY_LOW = false;
+    }
+
+  }else{
+    
+  }
+  
+}
 void modemPowerUp(){
   digitalWrite(ideaBoard_PWRKEY, LOW);
   delay(200);
