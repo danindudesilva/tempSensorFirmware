@@ -188,6 +188,7 @@ void setup() {
   Serial.println(F("INITIALIZING SENSOR 2"));
   dht2.begin();
   Serial.println(F("WAITING TO READ DATA...")); 
+  alertSMS("DEVICE POWER UP");
 }
 
 void loop() {
@@ -195,7 +196,7 @@ void loop() {
     //CHECK BATTERY LOW
   if(BATTERY_LOW){
     //do battery low action
-    Serial.println(F("%%%%%%%%% BATTERY LOW %%%%%%%%%%%%%%%"));
+    Serial.println(F("%%%%%%%%%%%%%%%%%%%%%%%% BATTERY LOW %%%%%%%%%%%%%%%%%%%%%%%%%"));
     if(MODEM_OFF){
 //      Serial.println(F("MODEM OFF"));
       modemPowerUp();
@@ -236,7 +237,7 @@ void loop() {
     
     CUR_PUBLISH = millis();
     if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
-      Serial.println(F("#############################################################"));
+      Serial.println(F("##############################################################"));
       Serial.println(F("GETTING READY TO PUBLISH DATA"));
       
       averageReadings();
@@ -310,7 +311,7 @@ void loop() {
         if(published){
           PUBLISH_COUNT +=1;
           Serial.println(F("DATA PUBLISH SUCCESSFUL"));
-          Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
+          Serial.println(F("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
           Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
           mqtt.disconnect();
           Serial.println(F("DISCONNED FROM MQTT BROKER"));
