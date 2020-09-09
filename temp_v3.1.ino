@@ -494,5 +494,10 @@ boolean dailyUpdate(){
   
   //send SMS when MQTT loop failed
   boolean sent = modem.sendSMS("+94777333295", "DEVICE ID: " + ID + "\nMAX SIG: " + String(maxSig) + "\nMIN SIG: " + String(minSig) + "\nMAX BAT: " + String(maxBatt) + "\nMIN BAT: " + String(minBatt) + "\nPUB COUNT: " + String(PUBLISH_COUNT) + "\nRESET COUNT: " + String(rstCnt));
+  
+  maxSig = 0;
+  minSig = 33;
+  maxBatt = 0;
+  minBatt = 4500;
   return sent;
 }
