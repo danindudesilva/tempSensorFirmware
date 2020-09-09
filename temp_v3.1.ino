@@ -127,6 +127,7 @@ void setup() {
   
   //Power up modem
   pinMode(ideaBoard_PWRKEY, OUTPUT);
+
   modemPowerUp();
   
   //Initialize Serial ports
@@ -177,7 +178,12 @@ void setup() {
       modem_retries += 1;
     }
   }
-  
+
+  if(BATTERY_LOW){
+    //do battery low action
+    String message = "Device " + ID + "BATTERY LOW, NOT CHARGING!\nDEVICE POWERING DOWN. DEVICE WILL POWER UP ONCE CONNECTED TO A POWER SOURCE.";
+    alertSMS(message);
+  }
 
   // MQTT Broker setup
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
@@ -321,6 +327,7 @@ void loop() {
 
 void modemPowerUp(){
   digitalWrite(ideaBoard_PWRKEY, LOW);
+  delay(200);
   digitalWrite(ideaBoard_PWRKEY, HIGH);
   delay(1000);
 }
@@ -513,5 +520,12 @@ boolean dailyUpdate(){
   minSig = 33;
   maxBatt = 0;
   minBatt = 4500;
+  return sent;
+}
+
+boolean alertSMS(String message){
+  //Send Alert to owner
+  boolean sent = modem.sendSMS("+94777333295", message);
+
   return sent;
 }
