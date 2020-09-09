@@ -52,7 +52,6 @@
 #include <SoftwareSerial.h>
 #include <EEPROM.h>
 #include "DHT.h"
-#include "LowPower.h"
 
 SoftwareSerial SerialAT(7,8); // RX, TX
 TinyGsm modem(SerialAT);
@@ -89,7 +88,7 @@ int8_t  h1_count = 0;
 int8_t  t2_count = 0;
 int8_t  h2_count = 0;
     
-#define PUB_INTERVAL 10000 //interval to publish data
+#define PUB_INTERVAL 60000 //interval to publish data
 unsigned long PREV_PUBLISH = 0;
 unsigned long CUR_PUBLISH = 0;
 int8_t  NO_READ_THRES = 90;       //start reading data when only this percentage of PUB_INTERVAL is elapsed
@@ -97,17 +96,18 @@ int8_t  READ_COUNT = 10;
 unsigned long PREV_READ = 0;
 unsigned long CUR_READ = 0;
 unsigned long PUBLISH_COUNT = 0;
-#define SMS_INTERVAL 3600000
+#define SMS_INTERVAL 86400000
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
-#define MIN_BATTERY_THRESHOLD 3940
+#define MIN_BATTERY_THRESHOLD 3600
 #define MIN_SIGNAL_THRESHOLD 6
 boolean BATTERY_LOW = false;
 boolean SIGNAL_LOW = false;
 boolean MODEM_OFF = false;
-#define RECHARGE_INTERVAL 300000  //interval for modem power down unti battery charge in milliseconds
+#define RECHARGE_INTERVAL 3600000  //interval for modem power down unti battery charge in milliseconds
 #define MAX_BATTERY_THRESHOLD 4100
+
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
@@ -200,7 +200,7 @@ void loop() {
     //do battery low action
     Serial.println(F("%%%%%%%%% BATTERY LOW %%%%%%%%%%%%%%%"));
     if(MODEM_OFF){
-      Serial.println(F("MODEM OFF"));
+//      Serial.println(F("MODEM OFF"));
       modemPowerUp();
       delay(5000);
       battlevel = modem.getBattVoltage();
@@ -213,13 +213,13 @@ void loop() {
       }else { //if the battery has charged        
         modemPowerUp();
         delay(1000);
-        boolean sentAlert = alertSMS("Device " + ID + "POWERED UP AND CHARGING");
+        boolean sentAlert = alertSMS("Device " + ID + "\nPOWERED UP AND CHARGING");
         if(!sentAlert){
           while(!sentAlert){
-            sentAlert = alertSMS("Device " + ID + "POWERED UP AND CHARGING");
+            sentAlert = alertSMS("Device " + ID + "\nPOWERED UP AND CHARGING");
           }
         }
-        Serial.println(F("MODEM ON"));
+//        Serial.println(F("MODEM ON"));
         MODEM_OFF = false;
         BATTERY_LOW = false;
       }
