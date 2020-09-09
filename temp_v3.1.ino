@@ -234,13 +234,15 @@ void loop() {
 
   }else{ //IF BATTERY OK
     
-    //This is where CUR_PUBLISH = millis(); previously was
+    CUR_PUBLISH = millis();
     if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
       Serial.println(F("#############################################################"));
       Serial.println(F("GETTING READY TO PUBLISH DATA"));
       
       averageReadings();
-  
+      
+      //modemPowerUp();
+      
       if(apnNo == 1){
         boolean gprs_connected = 0;
         for(int8_t i=1; i<=GPRS_ATTEMPTS; i++){
@@ -314,13 +316,17 @@ void loop() {
           Serial.println(F("DISCONNED FROM MQTT BROKER"));
           modem.gprsDisconnect();
           Serial.println(F("TCP CONNECTION SHUT"));
-          PREV_PUBLISH = CUR_PUBLISH;
+          //modemPowerDown();
+          Serial.println(F("MODEM POWERED DOWN"));
+          PREV_PUBLISH = millis();
           break;
         }else {
           Serial.println(F(": FAILED"));
           if(i == PUBLISH_ATTEMPTS){
             //Self Reset
             Serial.println(F("CAN'T PUBLISH DATA"));
+            //modemPowerDown();
+            Serial.println(F("MODEM POWERED DOWN"));
             PREV_PUBLISH = millis();
             STATUS_CODE = 400;
           }
@@ -356,8 +362,6 @@ void loop() {
       if(DU) Serial.println(F("DAILY UPDATE SENT"));
       PREV_SMS = CUR_SMS;
     }
-    
-    CUR_PUBLISH = millis();
   }  
 }
 
