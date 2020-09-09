@@ -107,6 +107,7 @@ boolean BATTERY_LOW = false;
 boolean SIGNAL_LOW = false;
 boolean MODEM_OFF = false;
 #define RECHARGE_INTERVAL 300000  //interval for modem power down unti battery charge in milliseconds
+
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
@@ -206,7 +207,7 @@ void loop() {
       if(battlevel < MIN_BATTERY_THRESHOLD*1.04){     //if the battery level has not increased more than 1.1 times the threshold
         //POWER OFF MODEM AGAIN
         Serial.println(battlevel);
-        modem.poweroff();
+        modemPowerDown();
       
       }else { //if the battery has charged        
         modemPowerUp();
@@ -227,7 +228,7 @@ void loop() {
       delay(100);
       dailyUpdate();
       Serial.println(F("MODEM POWERING DOWN"));
-      modem.poweroff();
+      modemPowerDown();
       MODEM_OFF = true;
       delay(RECHARGE_INTERVAL);
     }
@@ -368,6 +369,11 @@ void modemPowerUp(){
   delay(200);
   digitalWrite(ideaBoard_PWRKEY, HIGH);
   delay(1000);
+}
+
+void modemPowerDown(){
+  digitalWrite(ideaBoard_PWRKEY, LOW);
+  delay(200);
 }
 
 void averageReadings(){
