@@ -101,17 +101,17 @@ unsigned long PUBLISH_COUNT = 0;
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
-#define MODEM_RESET_INTERVAL 300000 //Approximately 8 hours 30000000ms
+#define MODEM_RESET_INTERVAL 30000000 //Approximately 8 hours 30000000ms
 unsigned long CUR_MODEM_RESET = 0;
 unsigned long PREV_MODEM_RESET = 0;
 
-#define MIN_BATTERY_THRESHOLD 3770
+#define MIN_BATTERY_THRESHOLD 3600
 #define MIN_SIGNAL_THRESHOLD 6
 boolean BATTERY_LOW = false;
 boolean SIGNAL_LOW = false;
 boolean MODEM_OFF = false;
 #define RECHARGE_INTERVAL 60000  //interval for modem power down unti battery charge in milliseconds
-#define MAX_BATTERY_THRESHOLD 3900
+#define MAX_BATTERY_THRESHOLD 4000
 #define GPRS_ATTEMPTS 10
 #define MQTT_ATTEMPTS 10
 #define PUBLISH_ATTEMPTS 10
