@@ -559,13 +559,10 @@ void mqttFail(){
  
  //send SMS when MQTT loop failed
     modem.sendSMS(SMS_NUMBER,
-    ID+","
-    +ID+","
-    +"mqttfail"+","
-    +String(rstCnt)+","
-    +String(siglevel)+","
-    +String(battlevel)+","
-    +FIRMWARE_VER
+    "DEVICE: "
+    +ID+"\nSignal: "
+    +String(siglevel)+"\nBattery: "
+    +String(battlevel)+"\nMQTT FAILED!"
     );
 }
 
