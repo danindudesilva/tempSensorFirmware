@@ -96,9 +96,14 @@ int8_t  READ_COUNT = 10;
 unsigned long PREV_READ = 0;
 unsigned long CUR_READ = 0;
 unsigned long PUBLISH_COUNT = 0;
+
 #define SMS_INTERVAL 86400000
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
+
+#define MODEM_RESET_INTERVAL 300000 //Approximately 8 hours 30000000ms
+unsigned long CUR_MODEM_RESET = 0;
+unsigned long PREV_MODEM_RESET = 0;
 
 #define MIN_BATTERY_THRESHOLD 3770
 #define MIN_SIGNAL_THRESHOLD 6
@@ -371,6 +376,13 @@ void loop() {
       if(DU) Serial.println(F("DAILY UPDATE SENT"));
       PREV_SMS = CUR_SMS;
     }
+
+    CUR_MODEM_RESET = millis();
+    if((unsigned long)(CUR_MODEM_RESET - PREV_MODEM_RESET) >= MODEM_RESET_INTERVAL){
+      Serial.println(F("MODEM RESETTING"));
+      modemReset();
+      PREV_MODEM_RESET = CUR_MODEM_RESET;
+    }
   }  
 }
 
@@ -392,6 +404,12 @@ void modemPowerUp(){
 void modemPowerDown(){
   digitalWrite(ideaBoard_PWRKEY, LOW);
   //pausFor(200);
+}
+
+void modemReset(){
+  digitalWrite(ideaBoard_RST, HIGH);
+  pauseFor(500);
+  digitalWrite(ideaBoard_RST, LOW);
 }
 
 void averageReadings(){
