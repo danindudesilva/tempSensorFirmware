@@ -67,7 +67,7 @@ int  rstCnt, battlevel;
 
 int8_t  apnNo, siglevel;
 int8_t  modem_retries = 0;
-int8_t  STATUS_CODE = 0;
+boolean  STATUS_CODE = 0;
 int8_t  minSig = 31;
 int8_t  maxSig = 0;
 int  minBatt = 4500;
@@ -100,16 +100,18 @@ unsigned long PUBLISH_COUNT = 0;
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
-#define MIN_BATTERY_THRESHOLD 3600
+#define MIN_BATTERY_THRESHOLD 3770
 #define MIN_SIGNAL_THRESHOLD 6
 boolean BATTERY_LOW = false;
 boolean SIGNAL_LOW = false;
 boolean MODEM_OFF = false;
-#define RECHARGE_INTERVAL 3600000  //interval for modem power down unti battery charge in milliseconds
-#define MAX_BATTERY_THRESHOLD 4100
+#define RECHARGE_INTERVAL 60000  //interval for modem power down unti battery charge in milliseconds
+#define MAX_BATTERY_THRESHOLD 3900
 #define GPRS_ATTEMPTS 10
 #define MQTT_ATTEMPTS 10
 #define PUBLISH_ATTEMPTS 10
+unsigned long RECHARGE_CUR = 0;
+unsigned long RECHARGE_PREV = 0;
 
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
@@ -117,7 +119,6 @@ DHT dht2(DHTPIN2, DHTTYPE);
 void setup() {
   //Initializing all variables
   modem_retries = 0;
-  STATUS_CODE = 0;
   
   //Set all output pins pins to LOW
   pinMode(MQTT_STATUS, OUTPUT);
@@ -171,7 +172,7 @@ void setup() {
     while(!imei_success){
       if(modem_retries == 10){
         Serial.println(F("CAN'T READ IMEI. CHECK MODEM"));
-        STATUS_CODE = 100;
+        STATUS_CODE = 1;
         break;
       }
       Serial.print(F("GETTING MODEM IMEI: "));
@@ -202,17 +203,22 @@ void loop() {
     if(MODEM_OFF){
 //      Serial.println(F("MODEM OFF"));
       modemPowerUp();
-      delay(5000);
-      battlevel = modem.getBattVoltage();
+      pauseFor(5000);
+      
+      int x = modem.getBattVoltage();
+      if(x != 0) battlevel = x;
+      
       if(battlevel < MAX_BATTERY_THRESHOLD){     //if the battery level has not increased more than 1.1 times the threshold
         //POWER OFF MODEM AGAIN
         Serial.println(battlevel);
         modemPowerDown();
-        delay(RECHARGE_INTERVAL/2);
+
+        //PAUSING CODE HERE UNTIL HALF OF RECHARGE INTERVAL IS PASSED
+        pauseFor(RECHARGE_INTERVAL/2);
       
       }else { //if the battery has charged        
         modemPowerUp();
-        delay(1000);
+        pauseFor(1000);
         boolean sentAlert = alertSMS("Device " + ID + "\nPOWERED UP AND CHARGING");
         if(!sentAlert){
           while(!sentAlert){
@@ -226,12 +232,12 @@ void loop() {
     }else{
       String message = "Device " + ID + "\nBATTERY LOW, NOT CHARGING!\nDEVICE POWERING DOWN. Device will power up when charged.";
       alertSMS(message);
-      delay(100);
+      //pauseFor(100);
       dailyUpdate();
       Serial.println(F("MODEM POWERING DOWN"));
       modemPowerDown();
       MODEM_OFF = true;
-      delay(RECHARGE_INTERVAL);
+      pauseFor(RECHARGE_INTERVAL);
     }
     
 
@@ -299,7 +305,7 @@ void loop() {
             if(i == MQTT_ATTEMPTS){
               //Self Reset
               Serial.println(F("CAN'T CONNECT TO MQTT BROKER"));
-              STATUS_CODE = 200;
+              STATUS_CODE = 1;
               mqttFail();
             }
           }
@@ -324,7 +330,7 @@ void loop() {
           PREV_PUBLISH = millis();
           break;
         }else {
-          Serial.println(F(": FAILED"));
+          Serial.println(F("DATA PUBLISH FAILED"));
           if(i == PUBLISH_ATTEMPTS){
             //Self Reset
             Serial.println(F("CAN'T PUBLISH DATA"));
@@ -368,18 +374,24 @@ void loop() {
   }  
 }
 
+//This function is used to block the code for a specified amount of time (in milliseconds) without using delay()
+void pauseFor(unsigned long interval){
+  unsigned long prev = millis();
+  unsigned long cur = millis();
+  
+  while((cur - prev) <= interval){
+    cur = millis();
+  }
+}
+
 void modemPowerUp(){
-  digitalWrite(ideaBoard_PWRKEY, LOW);
-  delay(200);
   digitalWrite(ideaBoard_PWRKEY, HIGH);
-  delay(1000);
+  //pausFor(1000);
 }
 
 void modemPowerDown(){
-  modem.poweroff();
-  delay(200);
   digitalWrite(ideaBoard_PWRKEY, LOW);
-  delay(200);
+  //pausFor(200);
 }
 
 void averageReadings(){
@@ -510,7 +522,7 @@ boolean mCon() {
   clientId = ID + String(random(10,99));
   
   if (!mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
-    Serial.println(F("fail"));
+    //Serial.println(F("fail"));
     return false;
   }  
   return mqtt.connected();
@@ -522,8 +534,10 @@ boolean publishData(){
   if(siglevel > maxSig) maxSig = siglevel;
   if(siglevel < minSig) minSig = siglevel;
   if(minSig <= MIN_SIGNAL_THRESHOLD) SIGNAL_LOW = true;
-  
-  battlevel = modem.getBattVoltage();
+
+  int x = modem.getBattVoltage();
+      if(x != 0) battlevel = x;
+      
   if(battlevel > maxBatt) maxBatt = battlevel;
   if(battlevel < minBatt) minBatt = battlevel;
   if(minBatt <= MIN_BATTERY_THRESHOLD) BATTERY_LOW = true;
@@ -540,7 +554,8 @@ boolean publishData(){
 void mqttFail(){
 
   siglevel  = modem.getSignalQuality();
-  battlevel = modem.getBattVoltage();
+  int x = modem.getBattVoltage();
+      if(x != 0) battlevel = x;
  
  //send SMS when MQTT loop failed
     modem.sendSMS(SMS_NUMBER,
@@ -560,7 +575,7 @@ boolean dailyUpdate(){
   boolean sent = 0;
   for(int8_t i=1; i<=10; i++){
     sent = modem.sendSMS(SMS_NUMBER, "DEVICE ID: " + ID + "\nMAX SIG: " + String(maxSig) + "\nMIN SIG: " + String(minSig) + "\nMAX BAT: " + String(maxBatt) + "\nMIN BAT: " + String(minBatt) + "\nPUB COUNT: " + String(PUBLISH_COUNT));
-    delay(1000);
+    //pauseFor(1000);
     if(sent) break;
   }
   
@@ -577,7 +592,7 @@ boolean alertSMS(String message){
   boolean sent = 0;
   for(int8_t i=1; i<=10; i++){
     sent = modem.sendSMS(SMS_NUMBER, message);
-    delay(1000);
+    //pauseFor(1000);
     if(sent) break;
   }
   return sent;
