@@ -97,11 +97,11 @@ unsigned long PREV_READ = 0;
 unsigned long CUR_READ = 0;
 unsigned long PUBLISH_COUNT = 0;
 
-#define SMS_INTERVAL 86400000
+#define SMS_INTERVAL 86400000   // 86400000 = 1 day, 43200000 = 12 hours, 21600000 = 6 hours
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
-#define MODEM_RESET_INTERVAL 30000000 //Approximately 8.5 hours 30000000ms
+#define MODEM_RESET_INTERVAL 28800000 //28800000 = 8 hours, 7200000 = 2 hours, 14400000 = 4 hours
 unsigned long CUR_MODEM_RESET = 0;
 unsigned long PREV_MODEM_RESET = 0;
 
@@ -379,7 +379,6 @@ void loop() {
 
     CUR_MODEM_RESET = millis();
     if((unsigned long)(CUR_MODEM_RESET - PREV_MODEM_RESET) >= MODEM_RESET_INTERVAL){
-      Serial.println(F("MODEM RESETTING"));
       modemReset();
       PREV_MODEM_RESET = CUR_MODEM_RESET;
     }
@@ -407,6 +406,7 @@ void modemPowerDown(){
 }
 
 void modemReset(){
+  Serial.println(F("MODEM RESETTING"));
   digitalWrite(ideaBoard_RST, HIGH);
   pauseFor(500);
   digitalWrite(ideaBoard_RST, LOW);
@@ -549,8 +549,17 @@ boolean mCon() {
 boolean publishData(){
 
   siglevel  = modem.getSignalQuality();
-  if(siglevel > maxSig) maxSig = siglevel;
-  if(siglevel < minSig) minSig = siglevel;
+  if(siglevel = 99){
+    minSig = 0;
+  }else {
+    if(siglevel > maxSig){
+      maxSig = siglevel;
+    }
+    if(siglevel < minSig){
+      minSig = siglevel;
+    }
+  }
+ 
   if(minSig <= MIN_SIGNAL_THRESHOLD) SIGNAL_LOW = true;
 
   int x = modem.getBattVoltage();
