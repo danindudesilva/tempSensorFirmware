@@ -101,7 +101,7 @@ unsigned long PUBLISH_COUNT = 0;
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
 
-#define MODEM_RESET_INTERVAL 30000000 //Approximately 8 hours 30000000ms
+#define MODEM_RESET_INTERVAL 30000000 //Approximately 8.5 hours 30000000ms
 unsigned long CUR_MODEM_RESET = 0;
 unsigned long PREV_MODEM_RESET = 0;
 
@@ -110,7 +110,7 @@ unsigned long PREV_MODEM_RESET = 0;
 boolean BATTERY_LOW = false;
 boolean SIGNAL_LOW = false;
 boolean MODEM_OFF = false;
-#define RECHARGE_INTERVAL 60000  //interval for modem power down unti battery charge in milliseconds
+#define RECHARGE_INTERVAL 3600000  //interval for modem power down until battery is charged. in milliseconds
 #define MAX_BATTERY_THRESHOLD 4000
 #define GPRS_ATTEMPTS 10
 #define MQTT_ATTEMPTS 10
@@ -248,7 +248,7 @@ void loop() {
 
   }else{ //IF BATTERY OK
     
-    CUR_PUBLISH = millis();
+    //This is where the CUR_PUBLISH = millis(); was
     if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
       Serial.println(F("##############################################################"));
       Serial.println(F("GETTING READY TO PUBLISH DATA"));
@@ -346,7 +346,7 @@ void loop() {
           }
         }
       }
-      
+      CUR_PUBLISH = millis();
     }else {
   //    Serial.print("NO_READ_THRES: "); Serial.println(NO_READ_THRES);
   //    Serial.print("PUB_INTERVAL: "); Serial.println(PUB_INTERVAL);
