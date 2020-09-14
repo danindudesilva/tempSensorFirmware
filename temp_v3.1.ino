@@ -200,7 +200,7 @@ void setup() {
 }
 
 void loop() {
-  //Serial.println(F("IN LOOP"));
+//  Serial.println(F("IN LOOP"));
     //CHECK BATTERY LOW
   if(BATTERY_LOW){
     //do battery low action
@@ -247,7 +247,8 @@ void loop() {
     
 
   }else{ //IF BATTERY OK
-    
+    CUR_PUBLISH = millis();
+//    Serial.print(F("CUR_PUBLISH: ")); Serial.println(CUR_PUBLISH);
     //This is where the CUR_PUBLISH = millis(); was
     if ((unsigned long)(CUR_PUBLISH - PREV_PUBLISH) >= PUB_INTERVAL){
       Serial.println(F("##############################################################"));
@@ -346,7 +347,7 @@ void loop() {
           }
         }
       }
-      CUR_PUBLISH = millis();
+      //CUR_PUBLISH = millis();
     }else {
   //    Serial.print("NO_READ_THRES: "); Serial.println(NO_READ_THRES);
   //    Serial.print("PUB_INTERVAL: "); Serial.println(PUB_INTERVAL);
@@ -382,7 +383,7 @@ void loop() {
       modemReset();
       PREV_MODEM_RESET = CUR_MODEM_RESET;
     }
-  }  
+  }
 }
 
 //This function is used to block the code for a specified amount of time (in milliseconds) without using delay()
