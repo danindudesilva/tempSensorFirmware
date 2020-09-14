@@ -550,7 +550,7 @@ boolean mCon() {
 boolean publishData(){
 
   siglevel  = modem.getSignalQuality();
-  if(siglevel = 99){
+  if(siglevel == 99){
     minSig = 0;
   }else {
     if(siglevel > maxSig){
