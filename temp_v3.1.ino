@@ -196,7 +196,7 @@ void setup() {
   Serial.println(F("INITIALIZING SENSOR 2"));
   dht2.begin();
   Serial.println(F("WAITING TO READ DATA...")); 
-  alertSMS("DEVICE POWER UP");
+  alertSMS("DEVICE POWERED UP");
 }
 
 void loop() {
@@ -235,7 +235,7 @@ void loop() {
         BATTERY_LOW = false;
       }
     }else{
-      String message = "Device " + ID + "\nBATTERY LOW, NOT CHARGING!\nDEVICE POWERING DOWN. Device will power up when charged.";
+      String message = "Device " + ID + "\nBATTERY LOW!\nDevice will power down. Please connect to a charger.";
       alertSMS(message);
       //pauseFor(100);
       dailyUpdate();
@@ -328,7 +328,7 @@ void loop() {
           Serial.println(F("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
           Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
           mqtt.disconnect();
-          Serial.println(F("DISCONNED FROM MQTT BROKER"));
+          Serial.println(F("DISCONNECTED FROM MQTT BROKER"));
           modem.gprsDisconnect();
           Serial.println(F("TCP CONNECTION SHUT"));
           //modemPowerDown();
@@ -531,7 +531,7 @@ boolean getModemIMEI() {
       return false;
     }
   }else {
-    Serial.println(F("INVALID IMEI. DIGITS COUNT MISMATCH"));
+    Serial.println(F("INVALID IMEI. DIGIT COUNT MISMATCH"));
     return false;
   }
 }
@@ -586,12 +586,7 @@ void mqttFail(){
       if(x != 0) battlevel = x;
  
  //send SMS when MQTT loop failed
-    modem.sendSMS(SMS_NUMBER,
-    "DEVICE: "
-    +ID+"\nSignal: "
-    +String(siglevel)+"\nBattery: "
-    +String(battlevel)+"\nMQTT FAILED!"
-    );
+    modem.sendSMS(SMS_NUMBER, "MQTT FAILED!\nDEVICE ID: " + ID + "\nSignal Level: " + String(siglevel) + "\nBattery Level: " + String((float)battlevel/1000.0));
 }
 
 boolean dailyUpdate(){
@@ -599,7 +594,7 @@ boolean dailyUpdate(){
   //send SMS when MQTT loop failed
   boolean sent = 0;
   for(int8_t i=1; i<=10; i++){
-    sent = modem.sendSMS(SMS_NUMBER, "DEVICE ID: " + ID + "\nMAX SIG: " + String(maxSig) + "\nMIN SIG: " + String(minSig) + "\nMAX BAT: " + String(maxBatt) + "\nMIN BAT: " + String(minBatt) + "\nPUB COUNT: " + String(PUBLISH_COUNT));
+    sent = modem.sendSMS(SMS_NUMBER, "DAILY UPDATE\nDEVICE ID: " + ID + "\nMax Signal Level: " + String(maxSig) + "\nMin Signal Level: " + String(minSig) + "\nMax Battery Level: " + String((float)maxBatt/1000.0) + "\nMin Battery Level: " + String((float)minBatt/1000.0) + "\nData Packets Sent: " + String(PUBLISH_COUNT));
     //pauseFor(1000);
     if(sent) break;
   }
