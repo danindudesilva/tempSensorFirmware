@@ -196,7 +196,7 @@ void setup() {
   Serial.println(F("INITIALIZING SENSOR 2"));
   dht2.begin();
   Serial.println(F("WAITING TO READ DATA...")); 
-  alertSMS("DEVICE POWERED UP");
+  alertSMS("DEVICE POWERED UP\nDevice ID: " + ID);
 }
 
 void loop() {
