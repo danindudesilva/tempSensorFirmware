@@ -27,7 +27,6 @@
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 #include <SoftwareSerial.h>
-//#include <EEPROM.h>
 #include "DHT.h"
 
 //Sensor Pins
@@ -57,7 +56,7 @@ PubSubClient mqtt(client);
 
 //DEVICE CONFIG
 #define FIRMWARE_VER "TempSensor_V3.1"
-#define APN 1                         // 1 = nbiot, 0 = gprs
+#define APN 0                         // 1 = nbiot, 0 = gprs
 #define RECHARGE_INTERVAL 3600000     //interval for modem power down until battery is charged. in milliseconds
 #define MODEM_RESET_INTERVAL 28800000 //28800000 = 8 hours, 7200000 = 2 hours, 14400000 = 4 hours
 #define PUB_INTERVAL 60000            //interval to publish data
@@ -161,7 +160,7 @@ void setup() {
 //  apnNo = EEPROM.read(EEPROM_ADDR+1);
 //  apnNo = 0; //0 = GPRS, 1 = NBIOT
   //Getting modem IMEI no.
-  Serial.print(F("GETTING MODEM IMEI: "));
+  Serial.print(F("READING IMEI: "));
   
   boolean imei_success = getModemIMEI();
   if(imei_success){
@@ -174,7 +173,7 @@ void setup() {
 //        STATUS_CODE = 1;
         break;
       }
-      Serial.print(F("GETTING MODEM IMEI: "));
+      Serial.print(F("READING IMEI: "));
       imei_success = getModemIMEI();
       delay(100);
       modem_retries += 1;
@@ -229,7 +228,7 @@ void loop() {
         BATTERY_LOW = false;
       }
     }else{
-      String message = "BATTERY LOW!\nDevice " + ID + "\nDevice will power down. Please connect the charger.";
+      String message = "BATTERY LOW!\nDevice " + ID + "\nDevice will power down. Connect the charger.\nSent: " + String(PUBLISH_COUNT) + "\nDropped: " + String(PUBLISH_FAILS);
       alertSMS(message);
       //pauseFor(100);
       dailyUpdate();
@@ -571,10 +570,10 @@ boolean publishData(){
   if(battlevel < minBatt) minBatt = battlevel;
   if(minBatt <= MIN_BATTERY_THRESHOLD) BATTERY_LOW = true;
     
-  Serial.print(F("Battery Level: ")); Serial.println((float)battlevel/1000.0);
-  String csvMessage = String(siglevel) + "," + String(battlevel) + "," + String(h1) + "," + String(t1) + "," + String(h2) + "," + String(t2) + "," + String(ID);  
+  Serial.print(F("Battery: ")); Serial.println((float)battlevel/1000.0);
+  String csvMessage = String(siglevel) + "," + String((float)battlevel/1000.0) + "," + String(h1) + "," + String(t1) + "," + String(h2) + "," + String(t2) + "," + String(ID);  
   Serial.println(csvMessage);
-  Serial.print(F("PUBLISHING DATA TO MQTT TOPIC: ")); Serial.println(EVENT_TOPIC);
+  Serial.print(F("MQTT TOPIC: ")); Serial.println(EVENT_TOPIC);
   boolean pub = mqtt.publish(EVENT_TOPIC,csvMessage.c_str());
   
   return pub;
@@ -587,7 +586,7 @@ void mqttFail(){
       if(x != 0) battlevel = x;
  
  //send SMS when MQTT loop failed
-    modem.sendSMS(SMS_NUMBER, "MQTT FAILED!\nMAC: " + ID + "\nSignal: " + String(siglevel) + "\nBattery: " + String((float)battlevel/1000.0) + "V\nData sent: " + String(PUBLISH_COUNT));
+    modem.sendSMS(SMS_NUMBER, "MQTT FAILED!\nMAC: " + ID + "\nSignal: " + String(siglevel) + "\nBattery: " + String((float)battlevel/1000.0) + "V\nSent: " + String(PUBLISH_COUNT));
     modemReset();
     alertSMS("Modem Reset");
 }
