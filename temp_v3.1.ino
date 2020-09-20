@@ -11,7 +11,7 @@
                   
  * @project    COLD ROOM TEMPERATURE MONITORING
  * @version    3.1
- * @file       main.cpp
+ * @file       temp_v3.1.ino
  * @author     Danindu de Silva
  * @group      Ideamart
  * @copyright  Dialog Axiata PLC
@@ -23,7 +23,12 @@
 ***********************************************/
 
 #define TINY_GSM_MODEM_SIM7000
-#define FIRMWARE_VER "TempSensor_V3.0"
+
+#include <TinyGsmClient.h>
+#include <PubSubClient.h>
+#include <SoftwareSerial.h>
+//#include <EEPROM.h>
+#include "DHT.h"
 
 //Sensor Pins
 #define DHTPIN1 2
@@ -41,80 +46,71 @@
 #define MQTT_PASS       "1598981175_4939"
 #define MQTT_BROKER     "mqtt.iot.ideamart.io"
 #define MQTT_PORT       1883
-#define GSM_APN         "dialogbb"
-#define NBIOT_APN       "nbiot"
-#define EEPROM_ADDR     0
-#define EEPROM_SIZE     1
 #define SMS_PORT        "87981"
 #define SMS_NUMBER      "+94777333295"
-
-#define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
-
-#include <TinyGsmClient.h>
-#include <PubSubClient.h>
-#include <SoftwareSerial.h>
-//#include <EEPROM.h>
-#include "DHT.h"
+#define DHTTYPE         DHT22   // DHT 22  (AM2302), AM2321
 
 SoftwareSerial SerialAT(7,8); // RX, TX
 TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
 PubSubClient mqtt(client);
 
+//DEVICE CONFIG
+#define FIRMWARE_VER "TempSensor_V3.1"
+#define APN 1                         // 1 = nbiot, 0 = gprs
+#define RECHARGE_INTERVAL 3600000     //interval for modem power down until battery is charged. in milliseconds
+#define MODEM_RESET_INTERVAL 28800000 //28800000 = 8 hours, 7200000 = 2 hours, 14400000 = 4 hours
+#define PUB_INTERVAL 60000            //interval to publish data
+#define SMS_INTERVAL 86400000         // 86400000 = 1 day, 43200000 = 12 hours, 21600000 = 6 hours
+#define MAX_BATTERY_THRESHOLD 4000
+#define MIN_BATTERY_THRESHOLD 3600
+#define MIN_SIGNAL_THRESHOLD 6
+#define GPRS_ATTEMPTS 5
+#define MQTT_ATTEMPTS 5
+#define PUBLISH_ATTEMPTS 5
+
 String ID;
 String clientId;
-int battlevel;
 
-int8_t  apnNo, siglevel;
+int battlevel;
+int minBatt = 4500;
+int maxBatt = 0;
+int PUBLISH_COUNT = 0;
+int PUBLISH_FAILS = 0;
+
+//boolean STATUS_CODE = 0;
+boolean BATTERY_LOW = false;
+boolean MODEM_OFF = false;
+//boolean SIGNAL_LOW = false;
+
+int8_t  siglevel;          //try #define apn
 int8_t  modem_retries = 0;
-boolean  STATUS_CODE = 0;
 int8_t  minSig = 31;
 int8_t  maxSig = 0;
-int  minBatt = 4500;
-int  maxBatt = 0;
+int8_t  t1_count = 0;
+int8_t  h1_count = 0;
+int8_t  t2_count = 0;
+int8_t  h2_count = 0;
+int8_t  NO_READ_THRES = 90;       //start reading data when only this percentage of PUB_INTERVAL is elapsed
+int8_t  READ_COUNT = 10;          //DO NOT MAKE THIS AND THE ABOVE ONE #define
 
 float h1 = 0.0;
 float h2 = 0.0;
 float t1 = 0.0;
 float t2 = 0.0;
-
 float tx1 = 0.0;
 float hx1 = 0.0;
 float tx2 = 0.0;
 float hx2 = 0.0;
 
-int8_t  t1_count = 0;
-int8_t  h1_count = 0;
-int8_t  t2_count = 0;
-int8_t  h2_count = 0;
-    
-#define PUB_INTERVAL 60000 //interval to publish data
 unsigned long PREV_PUBLISH = 0;
 unsigned long CUR_PUBLISH = 0;
-int8_t  NO_READ_THRES = 90;       //start reading data when only this percentage of PUB_INTERVAL is elapsed
-int8_t  READ_COUNT = 10;  //DO NOT MAKE THIS AND THE ABOVE ONE #define
 unsigned long PREV_READ = 0;
 unsigned long CUR_READ = 0;
-int PUBLISH_COUNT = 0;
-int PUBLISH_FAILS = 0;
-#define SMS_INTERVAL 86400000   // 86400000 = 1 day, 43200000 = 12 hours, 21600000 = 6 hours
 unsigned long CUR_SMS = 0;
 unsigned long PREV_SMS = 0;
-
-#define MODEM_RESET_INTERVAL 28800000 //28800000 = 8 hours, 7200000 = 2 hours, 14400000 = 4 hours
 unsigned long CUR_MODEM_RESET = 0;
 unsigned long PREV_MODEM_RESET = 0;
-
-#define MIN_BATTERY_THRESHOLD 3600
-#define MIN_SIGNAL_THRESHOLD 6
-boolean BATTERY_LOW = false;
-//boolean SIGNAL_LOW = false;
-boolean MODEM_OFF = false;
-#define RECHARGE_INTERVAL 3600000  //interval for modem power down until battery is charged. in milliseconds
-#define MAX_BATTERY_THRESHOLD 4000
-#define GPRS_ATTEMPTS 5
-#define MQTT_ATTEMPTS 5
-#define PUBLISH_ATTEMPTS 5
 unsigned long RECHARGE_CUR = 0;
 unsigned long RECHARGE_PREV = 0;
 
@@ -136,14 +132,12 @@ void setup() {
   
   //Power up modem
   pinMode(ideaBoard_PWRKEY, OUTPUT);
-
   modemPowerUp();
   
   //Initialize Serial ports
   Serial.begin(115200);
   SerialAT.begin(4800);
   delay(100);
-
 
   Serial.println(F("   _     _                                 _   "));
   Serial.println(F("  (_)   | |                               | |  "));
@@ -157,15 +151,15 @@ void setup() {
   Serial.println(F(" "));
   Serial.flush();
   
-  //Flash session id
+//  Flash session id
 //  rstCnt = EEPROM.read(EEPROM_ADDR);
 //  rstCnt= rstCnt + 1; 
 //  EEPROM.write(EEPROM_ADDR, rstCnt);
-  //Serial.print(F("RESET COUNT: ")); Serial.println(EEPROM.read(EEPROM_ADDR));
+//  Serial.print(F("RESET COUNT: ")); Serial.println(EEPROM.read(EEPROM_ADDR));
 
-  //Flash session id
+//  Flash session id
 //  apnNo = EEPROM.read(EEPROM_ADDR+1);
-  apnNo = 0; //0 = GPRS, 1 = NBIOT
+//  apnNo = 0; //0 = GPRS, 1 = NBIOT
   //Getting modem IMEI no.
   Serial.print(F("GETTING MODEM IMEI: "));
   
@@ -177,7 +171,7 @@ void setup() {
     while(!imei_success){
       if(modem_retries == 10){
         Serial.println(F("CAN'T READ IMEI. CHECK MODEM"));
-        STATUS_CODE = 1;
+//        STATUS_CODE = 1;
         break;
       }
       Serial.print(F("GETTING MODEM IMEI: "));
@@ -189,14 +183,14 @@ void setup() {
 
   // MQTT Broker setup
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
-  //mqtt.setCallback(cb);
-  Serial.println(F("INITIALIZING SENSOR 1"));
+//  mqtt.setCallback(cb);
+//  Serial.println(F("INITIALIZING SENSOR 1"));
   dht1.begin();
   
-  Serial.println(F("INITIALIZING SENSOR 2"));
+//  Serial.println(F("INITIALIZING SENSOR 2"));
   dht2.begin();
   Serial.println(F("WAITING TO READ DATA...")); 
-  alertSMS("DEVICE POWERED UP\nDevice ID: " + ID);
+  alertSMS("DEVICE POWERED UP\nMAC: " + ID);
 }
 
 void loop() {
@@ -235,7 +229,7 @@ void loop() {
         BATTERY_LOW = false;
       }
     }else{
-      String message = "Device " + ID + "\nBATTERY LOW!\nDevice will power down. Please connect to a charger.";
+      String message = "BATTERY LOW!\nDevice " + ID + "\nDevice will power down. Please connect the charger.";
       alertSMS(message);
       //pauseFor(100);
       dailyUpdate();
@@ -258,11 +252,11 @@ void loop() {
       
       //modemPowerUp();
       
-      if(apnNo == 1){
+      if(APN == 1){   //nbiot
         boolean gprs_connected = 0;
         for(int8_t i=1; i<=GPRS_ATTEMPTS; i++){
-          Serial.println(F("NETWORK: NBIOT"));
-          Serial.print(F("CONNECTING TO NETWORK: ATTEMPT ")); Serial.print(i);
+          
+          Serial.print(F("CONNECTING TO NBIOT NETWORK: ATTEMPT ")); Serial.print(i);
           gprs_connected = modem.gprsConnect("nbiot", "", "");
           if(gprs_connected){
             Serial.println(F(": SUCCESS"));
@@ -276,11 +270,11 @@ void loop() {
             }
           }
         }
-      }else {
+      }else {       //gprs
         boolean gprs_connected = 0;
         for(int8_t i=1; i<=GPRS_ATTEMPTS; i++){
-          Serial.println(F("NETWORK: GPRS"));
-          Serial.print(F("CONNECTING TO NETWORK: ATTEMPT ")); Serial.print(i);
+         
+          Serial.print(F("CONNECTING TO GPRS NETWORK: ATTEMPT ")); Serial.print(i);
           gprs_connected = modem.gprsConnect("dialogbb", "", "");
           if(gprs_connected){
             Serial.println(F(": SUCCESS"));
@@ -311,7 +305,7 @@ void loop() {
             if(i == MQTT_ATTEMPTS){
               //Self Reset
               Serial.println(F("CAN'T CONNECT TO MQTT BROKER"));
-              STATUS_CODE = 1;
+//              STATUS_CODE = 1;
               modem.gprsDisconnect();
               mqttFail();
             }
@@ -329,6 +323,7 @@ void loop() {
           Serial.println(F("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
           Serial.print(F("PUBLISH COUNT: ")); Serial.println(PUBLISH_COUNT);
           mqtt.disconnect();
+          digitalWrite(MQTT_STATUS, LOW);
           Serial.println(F("DISCONNECTED FROM MQTT BROKER"));
           modem.gprsDisconnect();
           Serial.println(F("TCP CONNECTION SHUT"));
@@ -346,8 +341,9 @@ void loop() {
             //modemPowerDown();
             //Serial.println(F("MODEM POWERED DOWN"));
             mqtt.disconnect();
+            digitalWrite(MQTT_STATUS, HIGH);
             PREV_PUBLISH = millis();
-            STATUS_CODE = 400;
+//            STATUS_CODE = 400;
           }
         }
       }
@@ -407,7 +403,7 @@ void modemPowerUp(){
 
 void modemPowerDown(){
   digitalWrite(ideaBoard_PWRKEY, LOW);
-  //pausFor(200);
+  pauseFor(2000);
 }
 
 void modemReset(){
@@ -529,7 +525,7 @@ boolean getModemIMEI() {
     if(sum % 10 == 0){
       //THIS IS VALID IMEI
       Serial.println(ID);
-      STATUS_CODE = 0;
+//      STATUS_CODE = 0;
       return true;
     }else{
       Serial.println(F("INVALID IMEI. CHECKSUM FAILED"));
@@ -591,17 +587,17 @@ void mqttFail(){
       if(x != 0) battlevel = x;
  
  //send SMS when MQTT loop failed
-    modem.sendSMS(SMS_NUMBER, "MQTT FAILED!\nDEVICE ID: " + ID + "\nSignal Level: " + String(siglevel) + "\nBattery Level: " + String((float)battlevel/1000.0) + "\nCurrent Publish Count: " + String(PUBLISH_COUNT));
+    modem.sendSMS(SMS_NUMBER, "MQTT FAILED!\nMAC: " + ID + "\nSignal: " + String(siglevel) + "\nBattery: " + String((float)battlevel/1000.0) + "V\nData sent: " + String(PUBLISH_COUNT));
     modemReset();
     alertSMS("Modem Reset");
 }
 
 boolean dailyUpdate(){
   
-  //send SMS when MQTT loop failed
+  //send daily SMS update
   boolean sent = 0;
   for(int8_t i=1; i<=10; i++){
-    sent = modem.sendSMS(SMS_NUMBER, "DAILY UPDATE\nDEVICE ID: " + ID + "\nMax Signal Level: " + String(maxSig) + "\nMin Signal Level: " + String(minSig) + "\nMax Battery Level: " + String((float)maxBatt/1000.0) + "\nMin Battery Level: " + String((float)minBatt/1000.0) + "\nData Packets Sent: " + String(PUBLISH_COUNT) + "\nData Packets Dropped: " + String(PUBLISH_FAILS));
+    sent = modem.sendSMS(SMS_NUMBER, "DAILY UPDATE\nMAC: " + ID + "\nSignal: " + String(minSig) + " - " + String(maxSig) + "\nBattery: " + String((float)minBatt/1000.0) + " - " + String((float)maxBatt/1000.0) + "\nSent: " + String(PUBLISH_COUNT) + "\nDropped: " + String(PUBLISH_FAILS));
     //pauseFor(1000);
     if(sent) break;
   }
