@@ -188,8 +188,16 @@ void setup() {
   
 //  Serial.println(F("INITIALIZING SENSOR 2"));
   dht2.begin();
-  Serial.println(F("WAITING TO READ DATA...")); 
-  alertSMS("DEVICE POWERED UP\nMAC: " + ID);
+  Serial.println(F("WAITING TO READ DATA..."));
+  
+//  delay(10000); //wait till modem attaches to network
+  modem.gprsConnect("dialogbb", "", "");
+  delay(5000);
+  boolean powerUp = alertSMS("DEVICE POWERED UP\nMAC: " + ID);
+  while (!powerUp){
+    powerUp = alertSMS("DEVICE POWERED UP\nMAC: " + ID);
+  }
+    
 }
 
 void loop() {
@@ -586,9 +594,9 @@ void mqttFail(){
       if(x != 0) battlevel = x;
  
  //send SMS when MQTT loop failed
-    modem.sendSMS(SMS_NUMBER, "MQTT FAILED!\nMAC: " + ID + "\nSignal: " + String(siglevel) + "\nBattery: " + String((float)battlevel/1000.0) + "V\nSent: " + String(PUBLISH_COUNT));
+    alertSMS("MQTT FAILED!\nMAC: " + ID + "\nSignal: " + String(siglevel) + "\nBattery: " + String((float)battlevel/1000.0) + "V\nSent: " + String(PUBLISH_COUNT) + "\nDropped: " + String(PUBLISH_FAILS));
     modemReset();
-    alertSMS("Modem Reset");
+//    alertSMS("Modem Reset"); not necessary now
 }
 
 boolean dailyUpdate(){
