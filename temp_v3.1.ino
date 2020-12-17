@@ -411,6 +411,7 @@ void modemPowerUp(){
 void modemPowerDown(){
   digitalWrite(ideaBoard_PWRKEY, LOW);
   pauseFor(2000);
+  modem.poweroff();
 }
 
 void modemReset(){
@@ -621,7 +622,7 @@ boolean dailyUpdate(){
 boolean alertSMS(String message){
   //Send Alert to owner
   boolean sent = 0;
-  for(int8_t i=1; i<=10; i++){
+  for(int8_t i=1; i<=2; i++){
     sent = modem.sendSMS(SMS_NUMBER, message);
     //pauseFor(1000);
     if(sent) break;
